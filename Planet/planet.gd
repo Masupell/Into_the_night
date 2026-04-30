@@ -14,6 +14,17 @@ extends Node3D
 			update_terrain()
 
 @export_group("Terrain")
+@export var noise := FastNoiseLite.new():
+	set(new_noise):
+		noise = new_noise
+		if noise:
+			noise.changed.connect(update_terrain)
+@export var height := 1.0:
+	set(new_height):
+		height = maxf(0.0, new_height)
+		update_terrain()
+		update_water()
+
 @export_group("Water")
 
 var terrain := ArrayMesh.new()
@@ -35,11 +46,20 @@ func create_sphere(sphere_radius: float, sphere_detail: int) -> Array:
 	
 	return sphere.get_mesh_arrays()
 
+func get_noise(vertex: Vector3) -> float:
+	return (noise.get_noise_3dv(vertex.normalized() * 2.0) + 1.0) / 2.0 * height
+
 func update_terrain():
-	if !terrain:
+	if !terrain or !noise:
 		pass
 	
 	var mesh_arrays = create_sphere(radius, detail)
+	var vertices: PackedVector3Array = mesh_arrays[ArrayMesh.ARRAY_VERTEX]
+	for i: int in vertices.size():
+		var vertex := vertices[i]
+		vertex += vertex.normalized() * get_noise(vertex)
+		vertices[i] = vertex
+	
 	terrain.clear_surfaces()
 	terrain.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
 
