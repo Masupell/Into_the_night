@@ -24,8 +24,26 @@ extends Node3D
 		height = maxf(0.0, new_height)
 		update_terrain()
 		update_water()
+@export var terrain_material: Material:
+	set(new_terrain_material):
+		terrain_material = new_terrain_material
+		if terrain.get_surface_count():
+			terrain.surface_set_material(0, terrain_material)
 
 @export_group("Water")
+@export_range(0.0, 1.0, 0.05) var water_level := 0.0:
+	set(new_water_level):
+		water_level = new_water_level
+		update_water()
+@export var water_detail := 64:
+	set(new_water_level):
+		water_detail = maxi(1, new_water_level)
+		update_water()
+@export var water_material: Material:
+	set(new_water_material):
+		water_material = new_water_material
+		if water.get_surface_count():
+			water.surface_set_material(0, water_material)
 
 var terrain := ArrayMesh.new()
 var water := ArrayMesh.new()
@@ -51,7 +69,7 @@ func get_noise(vertex: Vector3) -> float:
 
 func update_terrain():
 	if !terrain or !noise:
-		pass
+		return
 	
 	var mesh_arrays = create_sphere(radius, detail)
 	var vertices: PackedVector3Array = mesh_arrays[ArrayMesh.ARRAY_VERTEX]
@@ -62,6 +80,17 @@ func update_terrain():
 	
 	terrain.clear_surfaces()
 	terrain.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
+	terrain.surface_set_material(0, terrain_material)
 
 func update_water():
-	pass
+	if !water:
+		return
+	if water_level == 0.0:
+		$Water.visible = false
+		return
+	$Water.visible = true
+	var water_radius := lerpf(radius, radius + height, water_level)
+	var mesh_arrays := create_sphere(water_radius, water_detail)
+	water.clear_surfaces()
+	water.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
+	water.surface_set_material(0, water_material)

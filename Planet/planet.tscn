@@ -24,6 +24,8 @@ _surfaces = [{
 script = ExtResource("1_06kw6")
 noise = SubResource("FastNoiseLite_06kw6")
 height = 2.94
+water_level = null
+water_detail = null
 
 [node name="Terrain" type="MeshInstance3D" parent="." unique_id=655550254]
 mesh = SubResource("ArrayMesh_m2dqj")
