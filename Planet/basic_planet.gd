@@ -1,5 +1,5 @@
 @tool
-class_name Planet
+class_name BasicPlanet
 extends Node3D
 
 @export_group("Sphere")
@@ -31,7 +31,7 @@ extends Node3D
 			terrain.surface_set_material(0, terrain_material)
 
 @export_group("Water")
-@export_range(0.0, 1.0, 0.05) var water_level := 0.0:
+@export_range(0.0, 1.0, 0.05) var water_level := 0.5:
 	set(new_water_level):
 		water_level = new_water_level
 		update_water()
@@ -81,6 +81,9 @@ func update_terrain():
 	terrain.clear_surfaces()
 	terrain.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
 	terrain.surface_set_material(0, terrain_material)
+	
+	terrain_material.set_shader_parameter("radius", radius)
+	terrain_material.set_shader_parameter("height", height)
 
 func update_water():
 	if !water:
@@ -94,3 +97,6 @@ func update_water():
 	water.clear_surfaces()
 	water.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
 	water.surface_set_material(0, water_material)
+	
+	water_material.set_shader_parameter("radius", radius)
+	water_material.set_shader_parameter("level", radius + (height * water_level))
