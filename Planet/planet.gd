@@ -4,7 +4,7 @@ extends Node3D
 @export var resolution := 16
 @export var radius := 50.0
 
-@export var max_lod_level := 6
+@export var max_lod_level := 10
 @export var grid_size: int = 16
 
 @onready var chunk_container: Node3D = Node3D.new()
@@ -12,8 +12,13 @@ var free_chunks: Array[Chunk] = []
 
 var root_quads: Array[Quad] = []
 
+@export_range(10.0, 40.0) var lod_threshold_deg: float = 20.0
+var split_distances: Array[float] = []
+
 
 @onready var camera = get_viewport().get_camera_3d()
+var proj_scale: float
+var cam_pos: Vector3
 
 const CUBE_FACES: Array = [
 	[Vector3(-1, 1, 1), Vector3( 1, 1, 1), Vector3( 1,-1, 1), Vector3(-1,-1, 1)], # Front (+Z)
@@ -30,6 +35,8 @@ func _ready() -> void:
 	chunk_container.name = "ChunkPool"
 	add_child(chunk_container)
 	
+	compute_lod_thresholds()
+	
 	for face_corner in CUBE_FACES:
 		var q = Quad.new(self, 0, face_corner)
 		root_quads.append(q)
@@ -40,9 +47,18 @@ func _process(_delta: float) -> void:
 		camera = get_viewport().get_camera_3d()
 		return
 	
-	var cam_pos = to_local(camera.global_position)
+	cam_pos = camera.global_position
 	for q in root_quads:
 		q.update_lod(cam_pos)
+
+func compute_lod_thresholds():
+	split_distances.resize(max_lod_level + 1)
+	var edge_size: float = (radius * 2.0) / sqrt(3.0)
+	
+	for level in range(max_lod_level + 1):
+		var level_edge = edge_size / pow(2, level)
+		var dist = level_edge / tan(deg_to_rad(lod_threshold_deg))
+		split_distances[level] = dist
 
 
 func request_chunk() -> Chunk:

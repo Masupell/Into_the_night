@@ -5,6 +5,7 @@
 
 [node name="Planet" type="Node3D" unique_id=262084446]
 script = ExtResource("1_06kw6")
+lod_threshold_deg = null
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=57155458]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 160.18842)

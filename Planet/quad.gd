@@ -14,12 +14,10 @@ func _init(_planet: Planet, _level: int, _corners: Array) -> void:
 
 func update_lod(camera_pos: Vector3):
 	var center = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
-	
 	var surface_center = Planet.spherify(center) * planet.radius
 	var dist_to_cam = camera_pos.distance_to(surface_center)
 	
-	var split_dist = planet.radius * 2.0 / pow(2, level)
-	if dist_to_cam < split_dist and level < planet.max_lod_level:
+	if level < planet.max_lod_level and dist_to_cam < planet.split_distances[level]:
 		if children.is_empty():
 			split()
 		for child in children:
