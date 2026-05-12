@@ -49,11 +49,15 @@ func merge():
 
 func remove_chunk():
 	if chunk:
-		chunk.queue_free()
+		#chunk.queue_free()
+		planet.return_chunk(chunk)
 		chunk = null
 
 func draw_chunk():
+	#if chunk == null:
+		#chunk = Chunk.new()
+		#planet.add_child(chunk)
+		#chunk.build_mesh(corners, planet.grid_size, planet.radius)
 	if chunk == null:
-		chunk = Chunk.new()
-		planet.add_child(chunk)
+		chunk = planet.request_chunk()
 		chunk.build_mesh(corners, planet.grid_size, planet.radius)

@@ -7,7 +7,11 @@ extends Node3D
 @export var max_lod_level := 6
 @export var grid_size: int = 16
 
+@onready var chunk_container: Node3D = Node3D.new()
+var free_chunks: Array[Chunk] = []
+
 var root_quads: Array[Quad] = []
+
 
 @onready var camera = get_viewport().get_camera_3d()
 
@@ -22,6 +26,10 @@ const CUBE_FACES: Array = [
 
 func _ready() -> void:
 	get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+	
+	chunk_container.name = "ChunkPool"
+	add_child(chunk_container)
+	
 	for face_corner in CUBE_FACES:
 		var q = Quad.new(self, 0, face_corner)
 		root_quads.append(q)
@@ -35,6 +43,25 @@ func _process(_delta: float) -> void:
 	var cam_pos = to_local(camera.global_position)
 	for q in root_quads:
 		q.update_lod(cam_pos)
+
+
+func request_chunk() -> Chunk:
+	var c: Chunk
+	if free_chunks.is_empty():
+		c = Chunk.new()
+	else:
+		c = free_chunks.pop_back()
+	chunk_container.add_child(c)
+	c.visible = true
+	return c
+
+func return_chunk(c: Chunk):
+	c.visible = false
+	c.mesh = null
+	free_chunks.append(c)
+	if c.get_parent():
+		c.get_parent().remove_child(c)
+
 
 static func spherify(p: Vector3) -> Vector3:
 	var x2 := p.x * p.x
