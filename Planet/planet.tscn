@@ -8,7 +8,6 @@ script = ExtResource("1_06kw6")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=57155458]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 160.18842)
-near = 0.001
 script = ExtResource("2_m2dqj")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=142772881]

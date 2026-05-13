@@ -13,6 +13,9 @@ const FRUSTUM_INSIDE = 2
 
 var frustum_state = FRUSTUM_INTERSECT
 var bounding_aabb: AABB
+var bounding_center: Vector3
+var horizon_cos_alpha: float
+var horizon_sin_alpha: float
 var parent_quad: Quad
 
 func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null) -> void:
@@ -20,7 +23,7 @@ func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null) 
 	self.level = _level
 	self.corners = _corners
 	self.parent_quad = _parent
-	calculate_aabb()
+	calculate_bounds()
 
 func update_lod(camera_pos: Vector3, frustum_planes: Array):
 	if parent_quad and parent_quad.frustum_state == FRUSTUM_INSIDE:
@@ -78,11 +81,29 @@ func test_frustum(frustum_planes: Array) -> int:
 		return FRUSTUM_INSIDE
 	return FRUSTUM_INTERSECT
 
-func is_above_horizon(cam_local_pos: Vector3) -> bool:
-	var center = bounding_aabb.get_center()
-	var normal = center.normalized()
-	var dir_to_cam = (cam_local_pos - center).normalized()
-	return normal.dot(dir_to_cam) > -0.2
+func is_above_horizon(camera_pos: Vector3) -> bool:
+	var camera_distance: float = camera_pos.length()
+	if camera_distance <= planet.radius:
+		return true
+		
+	var camera_dir: Vector3 = camera_pos / camera_distance
+	var chunk_dir: Vector3 = bounding_center.normalized()
+	var cos_angle_to_chunk: float = camera_dir.dot(chunk_dir)
+	
+	if cos_angle_to_chunk >= horizon_cos_alpha:
+		return true
+		
+	var cos_camera_horizon: float = planet.radius / camera_distance
+	var sin_camera_horizon: float = sqrt(maxf(0.0, 1.0 - cos_camera_horizon * cos_camera_horizon))
+	var cos_terrain_extend: float = planet.radius / (planet.radius + planet.max_height)
+	var sin_terrain_extend: float = sqrt(maxf(0.0, 1.0 - cos_terrain_extend * cos_terrain_extend))
+	
+	var cos_total_horizon: float = cos_camera_horizon * cos_terrain_extend - sin_camera_horizon * sin_terrain_extend
+	
+	var sin_angle_to_chunk: float = sqrt(maxf(0.0, 1.0 - cos_angle_to_chunk * cos_angle_to_chunk))
+	var cos_nearest_edge: float = cos_angle_to_chunk * horizon_cos_alpha + sin_angle_to_chunk * horizon_sin_alpha
+	
+	return cos_nearest_edge > cos_total_horizon
 
 func split():
 	var m01 = corners[0].lerp(corners[1], 0.5) # Top
@@ -116,18 +137,29 @@ func draw_chunk():
 		chunk = planet.request_chunk()
 		chunk.build_mesh(corners, planet.grid_size, planet.radius)
 
-func calculate_aabb():
+func calculate_bounds():
+	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
+	var surface_center = Planet.spherify(mid_point) * planet.radius
+	
+	# Middle of chunk voluime including terrain
+	bounding_center = surface_center * (1.0 + (planet.max_height / planet.radius) * 0.5)
+	
+	# How far the corners are from the center
+	var center_dir = surface_center.normalized()
+	var corner_dir = Planet.spherify(corners[0]).normalized()
+	horizon_cos_alpha = center_dir.dot(corner_dir)
+	horizon_sin_alpha = sqrt(maxf(0.0, 1.0 - horizon_cos_alpha * horizon_cos_alpha))
+	
 	var min_v = Vector3(INF, INF, INF)
 	var max_v = Vector3(-INF, -INF, -INF)
 	
-	var points_to_check = corners.duplicate()
-	var center_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
-	points_to_check.append(center_point)
+	var points = corners.duplicate()
+	points.append(mid_point)
 	
-	for c in points_to_check:
-		var surface = Planet.spherify(c) * planet.radius
-		var mountains = Planet.spherify(c) * (planet.radius + planet.max_height)
-		
+	for p in points:
+		var s = Planet.spherify(p)
+		var surface = s * planet.radius
+		var mountains = s * (planet.radius + planet.max_height)
 		min_v = min_v.min(surface).min(mountains)
 		max_v = max_v.max(surface).max(mountains)
 	bounding_aabb = AABB(min_v, max_v - min_v)
