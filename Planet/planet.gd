@@ -3,8 +3,10 @@ extends Node3D
 
 @export var resolution := 16
 
-@export var radius := 100.0
-@export var max_height: float = 10.0
+@export var radius := 1000.0
+@export var max_height: float = 100.0
+
+
 
 @export var max_lod_level := 10
 @export var grid_size: int = 16

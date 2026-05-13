@@ -1,8 +1,8 @@
 extends Camera3D
 
 const MIN_SPEED = 1.0
-const MAX_SPEED = 100.0
-@export var move_speed: float = 50.0
+const MAX_SPEED = 1000.0
+@export var move_speed: float = 500.0
 @export var look_sensitivity: float = 0.1
 
 var debug_mode := false
