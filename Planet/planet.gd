@@ -2,7 +2,9 @@ class_name Planet
 extends Node3D
 
 @export var resolution := 16
-@export var radius := 50.0
+
+@export var radius := 100.0
+@export var max_height: float = 10.0
 
 @export var max_lod_level := 10
 @export var grid_size: int = 16
@@ -15,10 +17,7 @@ var root_quads: Array[Quad] = []
 @export_range(10.0, 40.0) var lod_threshold_deg: float = 20.0
 var split_distances: Array[float] = []
 
-
 @onready var camera = get_viewport().get_camera_3d()
-var proj_scale: float
-var cam_pos: Vector3
 
 const CUBE_FACES: Array = [
 	[Vector3(-1, 1, 1), Vector3( 1, 1, 1), Vector3( 1,-1, 1), Vector3(-1,-1, 1)], # Front (+Z)
@@ -47,9 +46,12 @@ func _process(_delta: float) -> void:
 		camera = get_viewport().get_camera_3d()
 		return
 	
-	cam_pos = camera.global_position
+	var cam_pos = to_local(camera.global_position) # as long as planet is on 0,0,0 'to_local' does not matter
+	var frustum_planes = []
+	for p in camera.get_frustum():
+		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
 	for q in root_quads:
-		q.update_lod(cam_pos)
+		q.update_lod(cam_pos, frustum_planes)
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)

@@ -44,7 +44,9 @@ func _process(delta):
 	
 	controlled_camera.global_position += direction.normalized() * move_speed * delta
 	
-	if Input.is_action_just_pressed("ui_accept"):
+	if Input.is_key_pressed(KEY_TAB):
+		print(global_position)
+	if Input.is_action_just_released("ui_accept"):
 		toggle_debug_mode()
 	if Input.is_key_pressed(KEY_ESCAPE): 
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
