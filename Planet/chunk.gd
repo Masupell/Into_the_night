@@ -1,7 +1,7 @@
 class_name Chunk
 extends MeshInstance3D
 
-func build_mesh(corners: Array, grid_size: int, radius: float):
+func build_mesh(corners: Array, grid_size: int, radius: float, noise: FastNoiseLite, height: float):
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
@@ -10,6 +10,8 @@ func build_mesh(corners: Array, grid_size: int, radius: float):
 	var normals = PackedVector3Array()
 	
 	var num_vertices = grid_size + 1
+	
+	var colors = PackedColorArray()
 	
 	for y in range(num_vertices):
 		for x in range(num_vertices):
@@ -21,8 +23,15 @@ func build_mesh(corners: Array, grid_size: int, radius: float):
 			var cube_point = top_lerp.lerp(bottom_lerp, v) # vertical
 			
 			var sphere_point = spherify(cube_point)
-			vertices.push_back(sphere_point * radius)
+			
+			var noise_val = noise.get_noise_3dv(sphere_point * 100.0) * height
+			
+			var vertex_pos = sphere_point * (radius + noise_val)
+			vertices.push_back(vertex_pos)
 			normals.push_back(sphere_point.normalized())
+			
+			var normalized_height = (noise_val / height + 1.0) * 0.5
+			colors.push_back(Color(normalized_height, 0.0, 0.0))
 	
 	for y in range(grid_size):
 		for x in range(grid_size):
@@ -42,14 +51,15 @@ func build_mesh(corners: Array, grid_size: int, radius: float):
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
+	mesh_array[Mesh.ARRAY_COLOR] = colors
 	
 	var new_mesh = ArrayMesh.new()
 	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_array)
 	self.mesh = new_mesh
 	
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(randf(), randf(), randf())
-	self.material_override = mat
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://Planet/planet.gdshader")
+	self.material_override = material
 
 
 static func spherify(p: Vector3) -> Vector3:

@@ -3,11 +3,13 @@ extends Node3D
 
 @export var resolution := 16
 
-@export var radius := 1000.0
-@export var max_height: float = 100.0
+@export var radius := 5000.0
+@export var max_height: float = 500.0
 
+@export_group("Terrain Settings")
+@export var terrain_noise: FastNoiseLite
 
-
+@export_group("", "")
 @export var max_lod_level := 10
 @export var grid_size: int = 16
 
@@ -31,7 +33,11 @@ const CUBE_FACES: Array = [
 ]
 
 func _ready() -> void:
-	get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+	
+	if not terrain_noise:
+		terrain_noise = FastNoiseLite.new()
+		terrain_noise.seed = randi()
 	
 	chunk_container.name = "ChunkPool"
 	add_child(chunk_container)
