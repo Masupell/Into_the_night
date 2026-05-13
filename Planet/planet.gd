@@ -67,9 +67,9 @@ func request_chunk() -> Chunk:
 	var c: Chunk
 	if free_chunks.is_empty():
 		c = Chunk.new()
+		chunk_container.add_child(c)
 	else:
 		c = free_chunks.pop_back()
-	chunk_container.add_child(c)
 	c.visible = true
 	return c
 
@@ -77,8 +77,8 @@ func return_chunk(c: Chunk):
 	c.visible = false
 	c.mesh = null
 	free_chunks.append(c)
-	if c.get_parent():
-		c.get_parent().remove_child(c)
+	#if c.get_parent():
+		#c.get_parent().remove_child(c)
 
 
 static func spherify(p: Vector3) -> Vector3:
