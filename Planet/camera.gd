@@ -1,4 +1,4 @@
-extends Camera3D
+extends CharacterBody3D
 
 const MIN_SPEED = 1.0
 const MAX_SPEED = 10000.0
@@ -8,12 +8,13 @@ const MAX_SPEED = 10000.0
 var debug_mode := false
 
 @onready var debug_camera := $"../Debug"
+@onready var main_camera: Camera3D = $Camera3D
 
-var controlled_camera: Camera3D
+var controlled_camera: Node3D
 
 func _ready():
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	controlled_camera = self
+	controlled_camera = main_camera
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -30,19 +31,28 @@ func _input(event):
 func _process(delta):
 	var direction = Vector3.ZERO
 	if Input.is_key_pressed(KEY_W):
-		direction -= controlled_camera.transform.basis.z
+		direction -= controlled_camera.global_transform.basis.z
 	if Input.is_key_pressed(KEY_S):
-		direction += controlled_camera.transform.basis.z
+		direction += controlled_camera.global_transform.basis.z
 	if Input.is_key_pressed(KEY_A):
-		direction -= controlled_camera.transform.basis.x
+		direction -= controlled_camera.global_transform.basis.x
 	if Input.is_key_pressed(KEY_D):
-		direction += controlled_camera.transform.basis.x
+		direction += controlled_camera.global_transform.basis.x
 	if Input.is_key_pressed(KEY_Q):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(-60.0 * delta))
 	if Input.is_key_pressed(KEY_E):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
 	
-	controlled_camera.global_position += direction.normalized() * move_speed * delta
+	if debug_mode:
+		velocity = Vector3.ZERO
+		controlled_camera.global_position += direction.normalized() * move_speed * delta
+	else:
+		if direction != Vector3.ZERO:
+			velocity = direction.normalized() * move_speed
+		else:
+			velocity = Vector3.ZERO 
+		move_and_slide()
+	# ==========================================
 	
 	if Input.is_key_pressed(KEY_TAB):
 		print(global_position)
@@ -53,18 +63,15 @@ func _process(delta):
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): 
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
-
 func toggle_debug_mode():
 	debug_mode = !debug_mode
 
 	if debug_mode:
-		debug_camera.global_transform = global_transform
-		
+		debug_camera.global_transform = main_camera.global_transform
 		debug_camera.current = true
-		current = false
-		
+		main_camera.current = false
 		controlled_camera = debug_camera
 	else:
-		current = true
+		main_camera.current = true
 		debug_camera.current = false
-		controlled_camera = self
+		controlled_camera = main_camera

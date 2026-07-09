@@ -8,14 +8,22 @@ frequency = 0.0141
 fractal_lacunarity = 2.305
 fractal_gain = 0.58
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_m2dqj"]
+radius = 1.5
+
 [node name="Planet" type="Node3D" unique_id=262084446]
 script = ExtResource("1_06kw6")
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
 
-[node name="Camera3D" type="Camera3D" parent="." unique_id=57155458]
+[node name="Camera" type="CharacterBody3D" parent="." unique_id=461413134]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
-far = 100000.0
 script = ExtResource("2_m2dqj")
+
+[node name="Camera3D" type="Camera3D" parent="Camera" unique_id=1231585573]
+far = 100000.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Camera" unique_id=1213336055]
+shape = SubResource("SphereShape3D_m2dqj")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=142772881]
 

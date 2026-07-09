@@ -65,6 +65,17 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_array)
 	self.mesh = new_mesh
 	
+	for child in get_children():
+		if child is StaticBody3D:
+			child.queue_free()
+	
+	var static_body := StaticBody3D.new()
+	add_child(static_body)
+	
+	var collision_shape := CollisionShape3D.new()
+	collision_shape.shape = new_mesh.create_trimesh_shape()
+	static_body.add_child(collision_shape)
+	
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://Planet/planet.gdshader")
 	material.set_shader_parameter("world_map", planet.world_texture)
