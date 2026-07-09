@@ -38,9 +38,9 @@ func _process(delta):
 	if Input.is_key_pressed(KEY_D):
 		direction += controlled_camera.transform.basis.x
 	if Input.is_key_pressed(KEY_Q):
-		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
-	if Input.is_key_pressed(KEY_E):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(-60.0 * delta))
+	if Input.is_key_pressed(KEY_E):
+		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
 	
 	controlled_camera.global_position += direction.normalized() * move_speed * delta
 	
