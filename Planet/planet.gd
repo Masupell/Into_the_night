@@ -37,11 +37,28 @@ const CUBE_FACES: Array = [
 var world_image: Image
 var world_texture: ImageTexture
 
+var atmosphere: MeshInstance3D
+
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
 	
 	planet_seed = randi()
 	generate_world_texture()
+	
+	atmosphere = MeshInstance3D.new()
+	var atmosphere_radius: float = radius + max_height + 200.0
+	
+	var atmosphere_mesh = SphereMesh.new()
+	atmosphere_mesh.radius = atmosphere_radius
+	atmosphere_mesh.height = atmosphere_radius*2.0
+	atmosphere.mesh = atmosphere_mesh
+	
+	var atmosphere_material = ShaderMaterial.new()
+	atmosphere_material.shader = preload("res://Planet/atmosphere.gdshader")
+	atmosphere_material.set_shader_parameter("planet_radius", radius)
+	atmosphere_material.set_shader_parameter("atmosphere_radius", atmosphere_radius)
+	atmosphere.material_override = atmosphere_material
+	add_child(atmosphere)
 	
 	if not terrain_noise:
 		terrain_noise = FastNoiseLite.new()

@@ -31,5 +31,5 @@ void fragment()
 	//ROUGHNESS = 0.22;
     //SPECULAR = 0.5;
 	
-	EMISSION = final_color; // While I don't have an atmosphere, so it does not reflect black back
+	//EMISSION = final_color; // While I don't have an atmosphere, so it does not reflect black back
 }
