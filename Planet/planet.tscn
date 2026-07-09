@@ -10,7 +10,7 @@ fractal_gain = 0.58
 
 [sub_resource type="Environment" id="Environment_m2dqj"]
 ambient_light_source = 2
-ambient_light_color = Color(0, 0, 0.68235296, 1)
+ambient_light_color = Color(0.5135, 0.5135, 0.79, 1)
 ambient_light_energy = 0.1
 
 [node name="Planet" type="Node3D" unique_id=262084446]
