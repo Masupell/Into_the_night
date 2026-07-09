@@ -13,6 +13,7 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	var colors = PackedColorArray()
 	
 	var num_vertices = grid_size + 1
+	var min_chunk_height := 1.0
 	
 	for y in range(num_vertices):
 		for x in range(num_vertices):
@@ -29,6 +30,8 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			
 			var texture_data = sample_image_bilinear(planet.world_image, world_uv)
 			var macro_height_ratio = texture_data.r
+			if macro_height_ratio < min_chunk_height:
+				min_chunk_height = macro_height_ratio
 			var macro_noise_value = macro_height_ratio * height
 			
 			var vertex_pos = sphere_point * (radius + macro_noise_value)
@@ -66,9 +69,16 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	material.shader = preload("res://Planet/planet.gdshader")
 	material.set_shader_parameter("world_map", planet.world_texture)
 	self.material_override = material
+	
+	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.45)
 
 
-func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, sea_level_ratio: float):
+func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float):
+	if min_terrain_height > sea_level_ratio:
+		if water_mesh_instance:
+			water_mesh_instance = null
+		return
+	
 	if not water_mesh_instance:
 		water_mesh_instance = MeshInstance3D.new()
 		add_child(water_mesh_instance)
