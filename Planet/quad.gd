@@ -135,7 +135,7 @@ func draw_chunk():
 		#chunk.build_mesh(corners, planet.grid_size, planet.radius)
 	if chunk == null:
 		chunk = planet.request_chunk()
-		chunk.build_mesh(corners, planet.grid_size, planet.radius, planet.terrain_noise, planet.max_height)
+		chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height)
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0

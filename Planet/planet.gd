@@ -32,8 +32,13 @@ const CUBE_FACES: Array = [
 	[Vector3(-1,-1, 1), Vector3( 1,-1, 1), Vector3( 1,-1,-1), Vector3(-1,-1,-1)], # Bottom(-Y)
 ]
 
+var world_image: Image
+var world_texture: ImageTexture
+
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
+	
+	generate_world_texture()
 	
 	if not terrain_noise:
 		terrain_noise = FastNoiseLite.new()
@@ -104,3 +109,42 @@ static func spherify(p: Vector3) -> Vector3:
 	res.y = p.y * sqrt(1.0 - z2 / 2.0 - x2 / 2.0 + z2 * x2 / 3.0)
 	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 	return res
+
+static func get_uv_from_vector(pos: Vector3) -> Vector2:
+	var n = pos.normalized()
+	var phi = atan2(n.z, n.x)
+	var theta = asin(n.y)
+	
+	var u = (phi + PI) / (2.0 * PI)
+	var v = (theta + PI / 2.0) / PI
+	return Vector2(u, v)
+
+func generate_world_texture():
+	world_image = Image.create(1024, 1024, false, Image.FORMAT_RGBA8)
+	
+	var continent_noise = FastNoiseLite.new()
+	continent_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	continent_noise.frequency = 0.003
+	
+	var mountain_noise = FastNoiseLite.new()
+	mountain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	mountain_noise.frequency = 0.015
+	
+	for y in range(1024):
+		for x in range(1024):
+			var u = float(x) / 1024.0
+			var v = float(y) / 1024.0
+			
+			var phi = (u * 2.0 * PI) - PI
+			var theta = (v * PI) - (PI / 2.0)
+			
+			var sphere_point = (Vector3(cos(theta) * cos(phi), sin(theta), cos(theta) * sin(phi))) * 150.0
+			var continent_value = (continent_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
+			var land_mask = smoothstep(0.48, 0.52, continent_value)
+			var mountain_value = (mountain_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
+			var final_hight = continent_value * 0.4 + (mountain_value * 0.6 * land_mask)
+			
+			world_image.set_pixel(x, y, Color(final_hight, 0.0, 0.0, 1.0))
+	
+	world_image.save_png("res://test/terrain.png")
+	world_texture = ImageTexture.create_from_image(world_image)
