@@ -39,6 +39,8 @@ var world_texture: ImageTexture
 
 var atmosphere: MeshInstance3D
 
+@onready var sun: DirectionalLight3D = $DirectionalLight3D
+
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
 	
@@ -55,6 +57,7 @@ func _ready() -> void:
 	
 	var atmosphere_material = ShaderMaterial.new()
 	atmosphere_material.shader = preload("res://Planet/atmosphere.gdshader")
+	atmosphere_material.render_priority = -10
 	atmosphere_material.set_shader_parameter("planet_radius", radius)
 	atmosphere_material.set_shader_parameter("atmosphere_radius", atmosphere_radius)
 	atmosphere.material_override = atmosphere_material
@@ -85,6 +88,11 @@ func _process(_delta: float) -> void:
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
 	for q in root_quads:
 		q.update_lod(cam_pos, frustum_planes)
+	
+	var sun_dir = sun.global_transform.basis.z.normalized()
+	var mat = atmosphere.material_override as ShaderMaterial
+	if mat:
+		mat.set_shader_parameter("sun_dir", sun_dir)
 	
 	if Input.is_key_pressed(KEY_1):
 		get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
