@@ -40,6 +40,10 @@ var world_texture: ImageTexture
 var atmosphere: MeshInstance3D
 
 @onready var sun: DirectionalLight3D = $DirectionalLight3D
+@export var orbit_speed: float = 0.05
+@export var orbit_distance: float = 2000.0
+
+var sun_orbit_angle: float = 0.0
 
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
@@ -63,6 +67,9 @@ func _ready() -> void:
 	atmosphere.material_override = atmosphere_material
 	add_child(atmosphere)
 	
+	sun.global_position = Vector3(0.0, 0.0, orbit_distance)
+	sun.look_at(global_position, Vector3.UP)
+	
 	if not terrain_noise:
 		terrain_noise = FastNoiseLite.new()
 		terrain_noise.seed = randi()
@@ -77,7 +84,7 @@ func _ready() -> void:
 		root_quads.append(q)
 		q.draw_chunk()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not camera:
 		camera = get_viewport().get_camera_3d()
 		return
@@ -89,6 +96,13 @@ func _process(_delta: float) -> void:
 	for q in root_quads:
 		q.update_lod(cam_pos, frustum_planes)
 	
+	sun_orbit_angle += orbit_speed * delta
+	var sun_x = cos(sun_orbit_angle) * orbit_distance
+	var sun_z = sin(sun_orbit_angle) * orbit_distance
+	var new_sun_pos = global_position + Vector3(sun_x, 0.0, sun_z)
+	sun.global_position = new_sun_pos
+	sun.look_at(global_position, Vector3.UP)
+	
 	var sun_dir = sun.global_transform.basis.z.normalized()
 	var mat = atmosphere.material_override as ShaderMaterial
 	if mat:
@@ -98,6 +112,11 @@ func _process(_delta: float) -> void:
 		get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
 	if Input.is_key_pressed(KEY_2):
 		get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+	
+	if Input.is_key_pressed(KEY_EQUAL):
+		orbit_speed += 0.05
+	if Input.is_key_pressed(KEY_MINUS):
+		orbit_speed = max(orbit_speed - 0.05, 0.0)
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)

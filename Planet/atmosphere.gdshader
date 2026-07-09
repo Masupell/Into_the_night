@@ -88,7 +88,7 @@ void fragment()
         }
         
 		// Not sure, if I will keep it or not
-		light_intensity = max(0.1, light_intensity); // for slight glow at night
+		//light_intensity = max(0.1, light_intensity); // for slight glow at night
 		
         float sunset_factor = smoothstep(0.25, -0.15, sun_angle);
         vec3 current_air_color = mix(scattered_blue, sunset_red, sunset_factor);
