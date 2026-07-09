@@ -19,7 +19,7 @@ void vertex()
 
 void fragment()
 {
-	vec3 face_normal = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+	vec3 face_normal = normalize(cross(dFdy(VERTEX), dFdx(VERTEX))); //inverted because of mesh winding order
 	NORMAL = face_normal;
 	SPECULAR = 0.1;
 	ROUGHNESS = 0.8;
@@ -43,10 +43,6 @@ void fragment()
     final_albedo = mix(final_albedo, dark_grass_color, to_dark_grass);
     final_albedo = mix(final_albedo, rock_color, to_rock);
     final_albedo = mix(final_albedo, snow_color, to_snow);
-	
-	float is_land = smoothstep(0.39, 0.41, v_height);
-    SPECULAR = mix(0.4, 0.9, is_land);
-    ROUGHNESS = mix(0.6, 0.3, is_land);
 	
 	ALBEDO = final_albedo;
 }
