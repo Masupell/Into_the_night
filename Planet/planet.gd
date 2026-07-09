@@ -33,7 +33,7 @@ const CUBE_FACES: Array = [
 ]
 
 func _ready() -> void:
-	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
 	
 	if not terrain_noise:
 		terrain_noise = FastNoiseLite.new()
@@ -60,6 +60,11 @@ func _process(_delta: float) -> void:
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
 	for q in root_quads:
 		q.update_lod(cam_pos, frustum_planes)
+	
+	if Input.is_key_pressed(KEY_1):
+		get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
+	if Input.is_key_pressed(KEY_2):
+		get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)
