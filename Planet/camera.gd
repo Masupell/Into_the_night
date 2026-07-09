@@ -100,6 +100,13 @@ func _process(delta):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): 
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		
+		
+	if Input.is_action_just_released("ui_up"):
+		var cube_scene = preload("res://temp/cube.tscn")
+		var cube = cube_scene.instantiate()
+		get_parent().add_child(cube)
+		cube.global_position = global_position
 
 func toggle_debug_mode():
 	debug_mode = !debug_mode
