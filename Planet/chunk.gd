@@ -25,12 +25,7 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			
 			var world_uv = planet.get_uv_from_vector(sphere_point)
 			
-			var img_w = planet.world_image.get_width()
-			var img_h = planet.world_image.get_height()
-			var px = clampi(int(world_uv.x * img_w), 0, img_w - 1)
-			var py = clampi(int(world_uv.y * img_h), 0, img_h - 1)
-			
-			var texture_data = planet.world_image.get_pixel(px, py)
+			var texture_data = sample_image_bilinear(planet.world_image, world_uv)
 			var macro_height_ratio = texture_data.r
 			var macro_noise_value = macro_height_ratio * height
 			
@@ -81,3 +76,30 @@ static func spherify(p: Vector3) -> Vector3:
 	res.y = p.y * sqrt(1.0 - z2 / 2.0 - x2 / 2.0 + z2 * x2 / 3.0)
 	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 	return res
+
+
+func sample_image_bilinear(img: Image, uv: Vector2) -> Color:
+	var width = img.get_width()
+	var height = img.get_height()
+	
+	var x = uv.x * (width - 1)
+	var y = uv.y * (height - 1)
+	
+	var x0 = clampi(int(floor(x)), 0, width - 1)
+	var y0 = clampi(int(floor(y)), 0, height - 1)
+	
+	var x1 = clampi(x0 + 1, 0, width - 1)
+	var y1 = clampi(y0 + 1, 0, height - 1)
+	
+	var tx = x - x0
+	var ty = y - y0
+	
+	var c00 = img.get_pixel(x0, y0)
+	var c10 = img.get_pixel(x1, y0)
+	var c01 = img.get_pixel(x0, y1)
+	var c11 = img.get_pixel(x1, y1)
+	
+	var top_row = c00.lerp(c10, tx)
+	var bottom_row = c01.lerp(c11, tx)
+	
+	return top_row.lerp(bottom_row, ty)

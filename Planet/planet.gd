@@ -1,6 +1,8 @@
 class_name Planet
 extends Node3D
 
+@export var planet_seed: int = 0
+
 @export var resolution := 16
 
 @export var radius := 5000.0
@@ -38,6 +40,7 @@ var world_texture: ImageTexture
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
 	
+	planet_seed = randi()
 	generate_world_texture()
 	
 	if not terrain_noise:
@@ -123,12 +126,21 @@ func generate_world_texture():
 	world_image = Image.create(1024, 1024, false, Image.FORMAT_RGBA8)
 	
 	var continent_noise = FastNoiseLite.new()
+	continent_noise.seed = planet_seed
 	continent_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	continent_noise.frequency = 0.003
+	continent_noise.frequency = 0.004
+	continent_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	continent_noise.fractal_octaves = 5
+	continent_noise.fractal_lacunarity = 2.0
+	continent_noise.fractal_gain = 0.55
 	
 	var mountain_noise = FastNoiseLite.new()
-	mountain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	mountain_noise.frequency = 0.015
+	mountain_noise.seed = planet_seed + 1234 # so it is not same seed as continents
+	mountain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	mountain_noise.frequency = 0.007
+	mountain_noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	mountain_noise.fractal_octaves = 4
+	mountain_noise.fractal_gain = 0.6
 	
 	for y in range(1024):
 		for x in range(1024):
@@ -140,11 +152,28 @@ func generate_world_texture():
 			
 			var sphere_point = (Vector3(cos(theta) * cos(phi), sin(theta), cos(theta) * sin(phi))) * 150.0
 			var continent_value = (continent_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
-			var land_mask = smoothstep(0.48, 0.52, continent_value)
-			var mountain_value = (mountain_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
-			var final_hight = continent_value * 0.4 + (mountain_value * 0.6 * land_mask)
 			
-			world_image.set_pixel(x, y, Color(final_hight, 0.0, 0.0, 1.0))
+			var final_height = 0.0
+			var sea_level = 0.46
+			
+			if continent_value < sea_level:
+				var ocean_ratio = continent_value / sea_level
+				final_height = lerp(0.1, 0.40, ocean_ratio)
+			else:
+				var land_progress = (continent_value - sea_level) / (1.0 - sea_level)
+				var coastal_profile = (mountain_noise.get_noise_3dv(sphere_point * 0.3) + 1.0) * 0.5
+				var shoreline_start = lerp(0.40, 0.44, coastal_profile)
+				var land_elevation = shoreline_start + (land_progress * 0.2)
+				var mountain_mask = smoothstep(0.52, 0.62, continent_value)
+				var mountain_value = (mountain_noise.get_noise_3dv(sphere_point * 1.5) + 1.0) * 0.5
+				mountain_value = pow(mountain_value, 1.8)
+				var headroom = 1.0 - land_elevation
+				var allowed_mountain_height = mountain_value * headroom * mountain_mask * 0.96
+				final_height = land_elevation + allowed_mountain_height
+			
+			final_height = clamp(final_height, 0.0, 1.0)
+			
+			world_image.set_pixel(x, y, Color(final_height, 1.0 if final_height < sea_level else 0.0, 0.0, 1.0))
 	
 	world_image.save_png("res://test/terrain.png")
 	world_texture = ImageTexture.create_from_image(world_image)
