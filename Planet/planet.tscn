@@ -8,6 +8,11 @@ frequency = 0.0141
 fractal_lacunarity = 2.305
 fractal_gain = 0.58
 
+[sub_resource type="Environment" id="Environment_m2dqj"]
+ambient_light_source = 2
+ambient_light_color = Color(0, 0, 0.68235296, 1)
+ambient_light_energy = 0.1
+
 [node name="Planet" type="Node3D" unique_id=262084446]
 script = ExtResource("1_06kw6")
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
@@ -21,3 +26,6 @@ script = ExtResource("2_m2dqj")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 153.645, 129.447, 68.27273)
 
 [node name="Debug" type="Camera3D" parent="." unique_id=2118636890]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1695176935]
+environment = SubResource("Environment_m2dqj")
