@@ -19,6 +19,8 @@ void vertex()
 
 void fragment()
 {
+	vec3 face_normal = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+	NORMAL = face_normal;
 	SPECULAR = 0.4;
 	ROUGHNESS = 0.6;
 	
@@ -43,8 +45,8 @@ void fragment()
     final_albedo = mix(final_albedo, snow_color, to_snow);
 	
 	float is_land = smoothstep(0.39, 0.41, v_height);
-    SPECULAR = mix(0.9, 0.4, is_land);
-    ROUGHNESS = mix(0.3, 0.6, is_land);
+    SPECULAR = mix(0.4, 0.9, is_land);
+    ROUGHNESS = mix(0.6, 0.3, is_land);
 	
 	ALBEDO = final_albedo;
 }
