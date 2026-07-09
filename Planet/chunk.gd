@@ -74,7 +74,7 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 
 
 func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float):
-	if min_terrain_height > sea_level_ratio:
+	if min_terrain_height > (sea_level_ratio + 0.1):
 		if water_mesh_instance:
 			water_mesh_instance.mesh = null
 		return
@@ -112,7 +112,7 @@ func build_water_mesh(corners: Array, grid_size: int, radius: float, height: flo
 			var bottom_lerp = corners[3].lerp(corners[2], u)
 			var cube_point = top_lerp.lerp(bottom_lerp, v)
 			
-			var sphere_point = cube_point.normalized() # Simple spherify for water
+			var sphere_point = spherify(cube_point)
 			
 			var vertex_pos = sphere_point * water_radisu
 			

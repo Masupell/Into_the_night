@@ -141,10 +141,8 @@ func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
 	var surface_center = Planet.spherify(mid_point) * planet.radius
 	
-	# Middle of chunk voluime including terrain
 	bounding_center = surface_center * (1.0 + (planet.max_height / planet.radius) * 0.5)
 	
-	# How far the corners are from the center
 	var center_dir = surface_center.normalized()
 	var corner_dir = Planet.spherify(corners[0]).normalized()
 	horizon_cos_alpha = center_dir.dot(corner_dir)
@@ -156,10 +154,15 @@ func calculate_bounds():
 	var points = corners.duplicate()
 	points.append(mid_point)
 	
+	points.append(corners[0].lerp(corners[1], 0.5))
+	points.append(corners[1].lerp(corners[2], 0.5))
+	points.append(corners[2].lerp(corners[3], 0.5))
+	points.append(corners[3].lerp(corners[0], 0.5))
+	
 	for p in points:
 		var s = Planet.spherify(p)
 		var surface = s * planet.radius
 		var mountains = s * (planet.radius + planet.max_height)
 		min_v = min_v.min(surface).min(mountains)
 		max_v = max_v.max(surface).max(mountains)
-	bounding_aabb = AABB(min_v, max_v - min_v)
+	bounding_aabb = (AABB(min_v, max_v - min_v)).grow(5.0) # grow, to give a bit of a buffer around the screen edges
