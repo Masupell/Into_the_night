@@ -1,6 +1,8 @@
 class_name Chunk
 extends MeshInstance3D
 
+var water_mesh_instance: MeshInstance3D
+
 func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, height: float):
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
@@ -64,6 +66,71 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	material.shader = preload("res://Planet/planet.gdshader")
 	material.set_shader_parameter("world_map", planet.world_texture)
 	self.material_override = material
+
+
+func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, sea_level_ratio: float):
+	if not water_mesh_instance:
+		water_mesh_instance = MeshInstance3D.new()
+		add_child(water_mesh_instance)
+	else:
+		water_mesh_instance.mesh = null
+
+	var mesh_array = []
+	mesh_array.resize(Mesh.ARRAY_MAX)
+	
+	var vertices = PackedVector3Array()
+	var indices = PackedInt32Array()
+	var normals = PackedVector3Array()
+	var uvs = PackedVector2Array()
+	
+	var num_vertices = grid_size + 1
+	
+	var water_radisu = radius + (sea_level_ratio * height)
+	
+	for y in range(num_vertices):
+		for x in range(num_vertices):
+			var u = float(x) / grid_size
+			var v = float(y) / grid_size
+			
+			var top_lerp = corners[0].lerp(corners[1], u)
+			var bottom_lerp = corners[3].lerp(corners[2], u)
+			var cube_point = top_lerp.lerp(bottom_lerp, v)
+			
+			var sphere_point = cube_point.normalized() # Simple spherify for water
+			
+			var vertex_pos = sphere_point * water_radisu
+			
+			vertices.push_back(vertex_pos)
+			normals.push_back(sphere_point)
+			uvs.push_back(Vector2(u, v))
+			
+	for y in range(grid_size):
+		for x in range(grid_size):
+			var top_left = x + y * num_vertices
+			var top_right = (x+1) + y * num_vertices
+			var bottom_left = x + (y+1) * num_vertices
+			var bottom_right = (x+1) + (y+1) * num_vertices
+			
+			indices.push_back(top_left)
+			indices.push_back(top_right)
+			indices.push_back(bottom_left)
+			
+			indices.push_back(top_right)
+			indices.push_back(bottom_right)
+			indices.push_back(bottom_left)
+	
+	mesh_array[Mesh.ARRAY_VERTEX] = vertices
+	mesh_array[Mesh.ARRAY_INDEX] = indices
+	mesh_array[Mesh.ARRAY_NORMAL] = normals
+	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
+	
+	var new_mesh = ArrayMesh.new()
+	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_array)
+	water_mesh_instance.mesh = new_mesh
+	
+	var water_mat = ShaderMaterial.new()
+	water_mat.shader = preload("res://Planet/water.gdshader")
+	water_mesh_instance.material_override = water_mat
 
 
 static func spherify(p: Vector3) -> Vector3:

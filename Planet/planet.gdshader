@@ -21,10 +21,10 @@ void fragment()
 {
 	vec3 face_normal = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
 	NORMAL = face_normal;
-	SPECULAR = 0.4;
-	ROUGHNESS = 0.6;
+	SPECULAR = 0.1;
+	ROUGHNESS = 0.8;
 	
-	vec3 water_color = vec3(0.0, 0.2, 0.8);
+	vec3 seabed_color = vec3(0.55, 0.48, 0.38);//vec3(0.0, 0.2, 0.8);
     vec3 grass_color = vec3(0.1, 0.4, 0.1);
     vec3 dark_grass_color = vec3(0.12, 0.28, 0.12);
     vec3 rock_color = vec3(0.4, 0.3, 0.2);
@@ -33,12 +33,12 @@ void fragment()
 	//float micro_detail = hash3D(normalize(v_world_pos) * 500.0) * 0.04;
 	//float blended_height = clamp(v_height + micro_detail, 0.0, 1.0);
 	
-	float to_grass = smoothstep(0.39, 0.41, v_height);
-    float to_dark_grass = smoothstep(0.49, 0.51, v_height);
-    float to_rock = smoothstep(0.64, 0.66, v_height);
-    float to_snow = smoothstep(0.83, 0.85, v_height);
+	float to_grass = smoothstep(0.44, 0.46, v_height);
+    float to_dark_grass = smoothstep(0.55, 0.58, v_height);
+    float to_rock = smoothstep(0.70, 0.74, v_height);
+    float to_snow = smoothstep(0.84, 0.86, v_height);
 	
-	vec3 final_albedo = water_color;
+	vec3 final_albedo = seabed_color;
     final_albedo = mix(final_albedo, grass_color, to_grass);
     final_albedo = mix(final_albedo, dark_grass_color, to_dark_grass);
     final_albedo = mix(final_albedo, rock_color, to_rock);
