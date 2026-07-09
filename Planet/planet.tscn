@@ -29,3 +29,9 @@ shape = SubResource("SphereShape3D_m2dqj")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=142772881]
 
 [node name="Debug" type="Camera3D" parent="." unique_id=2118636890]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=159878285]
+
+[node name="Label" type="Label" parent="CanvasLayer" unique_id=1031283555]
+offset_right = 40.0
+offset_bottom = 23.0

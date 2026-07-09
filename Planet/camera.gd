@@ -14,9 +14,14 @@ var align_to_planet := false
 
 var controlled_camera: Node3D
 
+#temp:
+@onready var text = $"../CanvasLayer/Label"
+
 func _ready():
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	controlled_camera = main_camera
+	
+	text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -34,6 +39,7 @@ func _input(event):
 			move_speed *= 1.2
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			move_speed /= 1.2
+		text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
 		move_speed = clamp(move_speed, MIN_SPEED, MAX_SPEED)
 		
 	if event is InputEventKey and event.pressed and not event.echo:
