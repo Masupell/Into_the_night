@@ -76,8 +76,14 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float):
 	if min_terrain_height > sea_level_ratio:
 		if water_mesh_instance:
-			water_mesh_instance = null
+			water_mesh_instance.mesh = null
 		return
+	
+	if not water_mesh_instance:
+		water_mesh_instance = MeshInstance3D.new()
+		add_child(water_mesh_instance)
+	else:
+		water_mesh_instance.mesh = null
 	
 	if not water_mesh_instance:
 		water_mesh_instance = MeshInstance3D.new()

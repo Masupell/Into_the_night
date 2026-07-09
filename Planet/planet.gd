@@ -12,7 +12,7 @@ extends Node3D
 @export var terrain_noise: FastNoiseLite
 
 @export_group("", "")
-@export var max_lod_level := 10
+@export var max_lod_level := 16
 @export var grid_size: int = 16
 
 @onready var chunk_container: Node3D = Node3D.new()
