@@ -94,7 +94,7 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	material.set_shader_parameter("world_map", planet.world_texture)
 	self.material_override = material
 	
-	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.45)
+	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.08)
 
 
 func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float):

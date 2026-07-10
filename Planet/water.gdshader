@@ -1,8 +1,8 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_always, cull_back;
 
-uniform vec3 color_shallow : source_color = vec3(0.0, 0.45, 0.55);
-uniform vec3 color_deep : source_color = vec3(0.01, 0.05, 0.2);
+uniform vec3 color_shallow : source_color = vec3(0.1, 0.7, 0.95);
+uniform vec3 color_deep : source_color = vec3(0.04, 0.2, 0.7);
 uniform float depth_scale = 8.0;
 
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable;

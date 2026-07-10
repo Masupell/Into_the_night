@@ -6,7 +6,7 @@ extends Node3D
 @export var resolution := 16
 
 @export var radius := 5000.0
-@export var max_height: float = 500.0
+@export var max_height: float = 200.0#500.0
 
 @export_group("Terrain Settings")
 @export var terrain_noise: FastNoiseLite
@@ -51,7 +51,8 @@ func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
 	
 	planet_seed = randi()
-	generate_world_texture()
+	#generate_world_texture()
+	world_from_texture()
 	
 	detail_noise.seed = planet_seed + 4321
 	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -174,6 +175,10 @@ static func get_uv_from_vector(pos: Vector3) -> Vector2:
 	var u = (phi + PI) / (2.0 * PI)
 	var v = (theta + PI / 2.0) / PI
 	return Vector2(u, v)
+
+func world_from_texture():
+	world_image = Image.load_from_file("res://temp/earth_map.png")
+	world_texture = ImageTexture.create_from_image(world_image)
 
 func generate_world_texture():
 	world_image = Image.create(1024, 1024, false, Image.FORMAT_RGBA8)
