@@ -181,7 +181,7 @@ func world_from_texture():
 	world_texture = ImageTexture.create_from_image(world_image)
 
 func generate_world_texture():
-	world_image = Image.create(1024, 1024, false, Image.FORMAT_RGBA8)
+	world_image = Image.create(2048, 2048, false, Image.FORMAT_RGBA8)
 	
 	var continent_noise = FastNoiseLite.new()
 	continent_noise.seed = planet_seed
@@ -200,10 +200,10 @@ func generate_world_texture():
 	mountain_noise.fractal_octaves = 4
 	mountain_noise.fractal_gain = 0.6
 	
-	for y in range(1024):
-		for x in range(1024):
-			var u = float(x) / 1024.0
-			var v = float(y) / 1024.0
+	for y in range(2048):
+		for x in range(2048):
+			var u = float(x) / 2048.0
+			var v = float(y) / 2048.0
 			
 			var phi = (u * 2.0 * PI) - PI
 			var theta = (v * PI) - (PI / 2.0)
