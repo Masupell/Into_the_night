@@ -11,6 +11,8 @@ extends Node3D
 @export_group("Terrain Settings")
 @export var terrain_noise: FastNoiseLite
 
+var detail_noise := FastNoiseLite.new()
+
 @export_group("", "")
 @export var max_lod_level := 16
 @export var grid_size: int = 16
@@ -50,6 +52,13 @@ func _ready() -> void:
 	
 	planet_seed = randi()
 	generate_world_texture()
+	
+	detail_noise.seed = planet_seed + 4321
+	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	detail_noise.frequency = 0.25
+	detail_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	detail_noise.fractal_octaves = 4
+	detail_noise.fractal_gain = 0.5
 	
 	atmosphere = MeshInstance3D.new()
 	var atmosphere_radius: float = radius + max_height + 200.0

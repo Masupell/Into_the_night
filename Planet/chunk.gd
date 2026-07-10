@@ -32,9 +32,22 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			var macro_height_ratio = texture_data.r
 			if macro_height_ratio < min_chunk_height:
 				min_chunk_height = macro_height_ratio
-			var macro_noise_value = macro_height_ratio * height
+			var macro_height = macro_height_ratio * height
 			
-			var vertex_pos = sphere_point * (radius + macro_noise_value)
+			# A bit more detail, needs twaking, but first step
+			var large_detail = planet.detail_noise.get_noise_3dv(sphere_point * 80.0)
+			var medium_detail = planet.detail_noise.get_noise_3dv(sphere_point * 250.0)
+			var small_detail = planet.detail_noise.get_noise_3dv(sphere_point * 700.0)
+			
+			var detail = large_detail * 4.0 + medium_detail * 1.5 + small_detail * 0.4
+			var land = smoothstep(0.45, 0.5, macro_height_ratio)
+			var mountain_factor = smoothstep(0.55, 0.8, macro_height_ratio)
+			var detail_strength = lerp(1.0, 6.0, mountain_factor)
+			
+			macro_height += detail * detail_strength * land
+			
+			
+			var vertex_pos = sphere_point * (radius + macro_height)
 			
 			vertices.push_back(vertex_pos)
 			normals.push_back(sphere_point.normalized())

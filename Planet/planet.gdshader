@@ -20,7 +20,7 @@ void vertex()
 void fragment()
 {
 	vec3 face_normal = normalize(cross(dFdy(VERTEX), dFdx(VERTEX))); //inverted because of mesh winding order
-	NORMAL = face_normal;
+	NORMAL = face_normal; //normalize(mix(NORMAL, face_normal, 0.5));
 	SPECULAR = 0.1;
 	ROUGHNESS = 0.8;
 	
