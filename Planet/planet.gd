@@ -168,8 +168,10 @@ func compute_lod_thresholds():
 	
 	for level in range(max_lod_level + 1):
 		var level_edge = edge_size / pow(2, level)
+		var level_diagonal = level_edge * sqrt(2.0)
 		var dist = level_edge / tan(deg_to_rad(lod_threshold_deg))
-		split_distances[level] = dist
+		var safety_floor = level_diagonal * 2.2
+		split_distances[level] = maxf(dist, safety_floor)
 
 
 func request_chunk() -> Chunk:
