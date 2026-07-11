@@ -188,24 +188,20 @@ func remove_chunk():
 		chunk = null
 
 func draw_chunk():
-	#if chunk == null:
-		#chunk = Chunk.new()
-		#planet.add_child(chunk)
-		#chunk.build_mesh(corners, planet.grid_size, planet.radius)
 	if chunk == null:
 		chunk = planet.request_chunk()
-		
-		var n_nb = get_neighbor_north()
-		var s_nb = get_neighbor_south()
-		var e_nb = get_neighbor_east()
-		var w_nb = get_neighbor_west()
-		
-		var stitch_n = n_nb != null and n_nb.level < level
-		var stitch_s = s_nb != null and s_nb.level < level
-		var stitch_e = e_nb != null and e_nb.level < level
-		var stitch_w = w_nb != null and w_nb.level < level
-		
-		chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w)
+	
+	var n_nb = get_neighbor_north()
+	var s_nb = get_neighbor_south()
+	var e_nb = get_neighbor_east()
+	var w_nb = get_neighbor_west()
+	
+	var stitch_n = n_nb != null and n_nb.level < level
+	var stitch_s = s_nb != null and s_nb.level < level
+	var stitch_e = e_nb != null and e_nb.level < level
+	var stitch_w = w_nb != null and w_nb.level < level
+	
+	chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w)
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
