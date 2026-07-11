@@ -7,16 +7,27 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
+	var num_vertices = grid_size + 1
+	var total_vertices = num_vertices * num_vertices
+	
 	var vertices = PackedVector3Array()
 	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
 	var colors = PackedColorArray()
 	
-	var num_vertices = grid_size + 1
+	vertices.resize(total_vertices)
+	indices.resize(grid_size*grid_size*6)
+	normals.resize(total_vertices)
+	colors.resize(total_vertices)
+	
+	var sphere_points_cache = PackedVector3Array()
+	sphere_points_cache.resize(total_vertices)
+	
 	var min_chunk_height := 1.0
 	
 	for y in range(num_vertices):
 		for x in range(num_vertices):
+			var idx = x + (y * num_vertices)
 			var u = float(x) / grid_size
 			var v = float(y) / grid_size
 			
@@ -25,6 +36,7 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			var cube_point = top_lerp.lerp(bottom_lerp, v) # vertical
 			
 			var sphere_point = spherify(cube_point)
+			sphere_points_cache[idx] = sphere_point
 			
 			var world_uv = planet.get_uv_from_vector(sphere_point)
 			
@@ -49,10 +61,9 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			
 			var vertex_pos = sphere_point * (radius + macro_height)
 			
-			vertices.push_back(vertex_pos)
-			normals.push_back(sphere_point.normalized())
-			
-			colors.push_back(Color(macro_height_ratio, 0.0, 0.0))
+			vertices[idx] = vertex_pos
+			normals[idx] = sphere_point.normalized()
+			colors[idx] = Color(macro_height_ratio, 0.0, 0.0)
 	
 	
 	# This array will hold arrays of vertex indices that need stitching
@@ -104,18 +115,19 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	
 	for y in range(grid_size):
 		for x in range(grid_size):
+			var idx = (x + (y * grid_size)) * 6
 			var top_left = x + y * num_vertices
 			var top_right = (x+1) + y * num_vertices
 			var bottom_left = x + (y+1) * num_vertices
 			var bottom_right = (x+1) + (y+1) * num_vertices
 			
-			indices.push_back(top_left)
-			indices.push_back(top_right)
-			indices.push_back(bottom_left)
+			indices[idx] = top_left
+			indices[idx+1] = top_right
+			indices[idx+2] = bottom_left
 			
-			indices.push_back(top_right)
-			indices.push_back(bottom_right)
-			indices.push_back(bottom_left)
+			indices[idx+3] = top_right
+			indices[idx+4] = bottom_right
+			indices[idx+5] = bottom_left
 	
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = indices
@@ -140,10 +152,10 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	
 	self.material_override = planet.terrain_material
 	
-	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.08, planet.water_material)
+	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.08, planet.water_material, sphere_points_cache)
 
 
-func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float, water_material):
+func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float, water_material: ShaderMaterial, sphere_points_cache: PackedVector3Array):
 	if min_terrain_height > (sea_level_ratio + 0.1):
 		if water_mesh_instance:
 			water_mesh_instance.mesh = null
@@ -158,46 +170,50 @@ func build_water_mesh(corners: Array, grid_size: int, radius: float, height: flo
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
+	var num_vertices = grid_size + 1
+	var total_vertices = num_vertices * num_vertices
+	
 	var vertices = PackedVector3Array()
 	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
 	var uvs = PackedVector2Array()
 	
-	var num_vertices = grid_size + 1
+	vertices.resize(total_vertices)
+	normals.resize(total_vertices)
+	uvs.resize(total_vertices)
+	indices.resize(grid_size * grid_size * 6)
 	
 	var water_radisu = radius + (sea_level_ratio * height)
 	
 	for y in range(num_vertices):
 		for x in range(num_vertices):
+			var idx = x + (y * num_vertices)
 			var u = float(x) / grid_size
 			var v = float(y) / grid_size
 			
-			var top_lerp = corners[0].lerp(corners[1], u)
-			var bottom_lerp = corners[3].lerp(corners[2], u)
-			var cube_point = top_lerp.lerp(bottom_lerp, v)
-			
-			var sphere_point = spherify(cube_point)
+			var sphere_point = sphere_points_cache[idx]
 			
 			var vertex_pos = sphere_point * water_radisu
 			
-			vertices.push_back(vertex_pos)
-			normals.push_back(sphere_point)
-			uvs.push_back(Vector2(u, v))
+			vertices[idx] = vertex_pos
+			normals[idx] = sphere_point
+			uvs[idx] = Vector2(u, v)
 			
 	for y in range(grid_size):
 		for x in range(grid_size):
+			var idx = (x + (y * grid_size)) * 6
 			var top_left = x + y * num_vertices
 			var top_right = (x+1) + y * num_vertices
 			var bottom_left = x + (y+1) * num_vertices
 			var bottom_right = (x+1) + (y+1) * num_vertices
 			
-			indices.push_back(top_left)
-			indices.push_back(top_right)
-			indices.push_back(bottom_left)
+			indices[idx] = top_left
+			indices[idx+1] = top_right
+			indices[idx+2] = bottom_left
 			
-			indices.push_back(top_right)
-			indices.push_back(bottom_right)
-			indices.push_back(bottom_left)
+			indices[idx+3] = top_right
+			indices[idx+4] = bottom_right
+			indices[idx+5] = bottom_left
 	
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = indices
