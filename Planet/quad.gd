@@ -18,11 +18,15 @@ var horizon_cos_alpha: float
 var horizon_sin_alpha: float
 var parent_quad: Quad
 
-func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null) -> void:
+enum Type {TOP_LEFT = 0, TOP_RIGHT = 1, BOTTOM_RIGHT = 2, BOTTOM_LEFT = 3, ROOT = -1}
+var quad_type: Type = Type.ROOT
+
+func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, _type: Type = Type.ROOT) -> void:
 	self.planet = _planet
 	self.level = _level
 	self.corners = _corners
 	self.parent_quad = _parent
+	self.quad_type = _type
 	calculate_bounds()
 
 func update_lod(camera_pos: Vector3, frustum_planes: Array):
@@ -105,6 +109,58 @@ func is_above_horizon(camera_pos: Vector3) -> bool:
 	
 	return cos_nearest_edge > cos_total_horizon
 
+
+func get_neighbor_north() -> Quad:
+	if parent_quad == null: return null
+	if quad_type == Type.BOTTOM_LEFT: return parent_quad.children[Type.TOP_LEFT]
+	if quad_type == Type.BOTTOM_RIGHT: return parent_quad.children[Type.TOP_RIGHT]
+	
+	var p_neighbor = parent_quad.get_neighbor_north()
+	if p_neighbor == null or p_neighbor.children.is_empty(): return p_neighbor
+	return p_neighbor.children[Type.BOTTOM_LEFT] if quad_type == Type.TOP_LEFT else p_neighbor.children[Type.BOTTOM_RIGHT]
+
+func get_neighbor_south() -> Quad:
+	if parent_quad == null: return null
+	if quad_type == Type.TOP_LEFT: return parent_quad.children[Type.BOTTOM_LEFT]
+	if quad_type == Type.TOP_RIGHT: return parent_quad.children[Type.BOTTOM_RIGHT]
+	
+	var p_neighbor = parent_quad.get_neighbor_south()
+	if p_neighbor == null or p_neighbor.children.is_empty(): return p_neighbor
+	return p_neighbor.children[Type.TOP_LEFT] if quad_type == Type.BOTTOM_LEFT else p_neighbor.children[Type.TOP_RIGHT]
+
+func get_neighbor_east() -> Quad:
+	if parent_quad == null: return null
+	if quad_type == Type.TOP_LEFT: return parent_quad.children[Type.TOP_RIGHT]
+	if quad_type == Type.BOTTOM_LEFT: return parent_quad.children[Type.BOTTOM_RIGHT]
+	
+	var p_neighbor = parent_quad.get_neighbor_east()
+	if p_neighbor == null or p_neighbor.children.is_empty(): return p_neighbor
+	return p_neighbor.children[Type.TOP_LEFT] if quad_type == Type.TOP_RIGHT else p_neighbor.children[Type.BOTTOM_LEFT]
+
+func get_neighbor_west() -> Quad:
+	if parent_quad == null: return null
+	if quad_type == Type.TOP_RIGHT: return parent_quad.children[Type.TOP_LEFT]
+	if quad_type == Type.BOTTOM_RIGHT: return parent_quad.children[Type.BOTTOM_LEFT]
+	
+	var p_neighbor = parent_quad.get_neighbor_west()
+	if p_neighbor == null or p_neighbor.children.is_empty(): return p_neighbor
+	return p_neighbor.children[Type.TOP_RIGHT] if quad_type == Type.TOP_LEFT else p_neighbor.children[Type.BOTTOM_RIGHT]
+
+
+func refresh_neighbors():
+	var neighbors = [
+		get_neighbor_north(),
+		get_neighbor_south(),
+		get_neighbor_east(),
+		get_neighbor_west()
+	]
+	
+	for neighbor in neighbors:
+		if neighbor != null and neighbor.chunk != null:
+			# recalculating entire chunk right now, can't just change specific vertices, 
+			# because of collision mesh and gpu uploading makes this faster anyways
+			neighbor.draw_chunk() 
+
 func split():
 	var m01 = corners[0].lerp(corners[1], 0.5) # Top
 	var m12 = corners[1].lerp(corners[2], 0.5) # Right
@@ -112,15 +168,18 @@ func split():
 	var m30 = corners[3].lerp(corners[0], 0.5) # Left
 	var m_mid = corners[0].lerp(corners[2], 0.5) # Center
 	
-	children.append(Quad.new(planet, level + 1, [corners[0], m01, m_mid, m30], self)) # TopLeft
-	children.append(Quad.new(planet, level + 1, [m01, corners[1], m12, m_mid], self)) # TopRight
-	children.append(Quad.new(planet, level + 1, [m_mid, m12, corners[2], m23], self)) # BottomRight
-	children.append(Quad.new(planet, level + 1, [m30, m_mid, m23, corners[3]], self)) # BottomLeft
+	children.append(Quad.new(planet, level + 1, [corners[0], m01, m_mid, m30], self, Type.TOP_LEFT)) # TopLeft
+	children.append(Quad.new(planet, level + 1, [m01, corners[1], m12, m_mid], self, Type.TOP_RIGHT)) # TopRight
+	children.append(Quad.new(planet, level + 1, [m_mid, m12, corners[2], m23], self, Type.BOTTOM_RIGHT)) # BottomRight
+	children.append(Quad.new(planet, level + 1, [m30, m_mid, m23, corners[3]], self, Type.BOTTOM_LEFT)) # BottomLeft
+	
+	refresh_neighbors()
 
 func merge():
 	for child in children:
 		child.remove_chunk()
 	children.clear()
+	refresh_neighbors()
 
 func remove_chunk():
 	if chunk:
@@ -135,7 +194,18 @@ func draw_chunk():
 		#chunk.build_mesh(corners, planet.grid_size, planet.radius)
 	if chunk == null:
 		chunk = planet.request_chunk()
-		chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height)
+		
+		var n_nb = get_neighbor_north()
+		var s_nb = get_neighbor_south()
+		var e_nb = get_neighbor_east()
+		var w_nb = get_neighbor_west()
+		
+		var stitch_n = n_nb != null and n_nb.level < level
+		var stitch_s = s_nb != null and s_nb.level < level
+		var stitch_e = e_nb != null and e_nb.level < level
+		var stitch_w = w_nb != null and w_nb.level < level
+		
+		chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w)
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0

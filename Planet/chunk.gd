@@ -3,7 +3,7 @@ extends MeshInstance3D
 
 var water_mesh_instance: MeshInstance3D
 
-func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, height: float):
+func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool):
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
@@ -53,6 +53,54 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			normals.push_back(sphere_point.normalized())
 			
 			colors.push_back(Color(macro_height_ratio, 0.0, 0.0))
+	
+	
+	# This array will hold arrays of vertex indices that need stitching
+	var edges_to_stitch: Array[PackedInt32Array] = []
+
+	# Collect North Edge indices (y = 0)
+	if stitch_north:
+		var edge := PackedInt32Array()
+		for x in range(num_vertices):
+			edge.push_back(x)
+		edges_to_stitch.append(edge)
+
+	# Collect South Edge indices (y = grid_size)
+	if stitch_south:
+		var edge := PackedInt32Array()
+		for x in range(num_vertices):
+			edge.push_back(x + grid_size * num_vertices)
+		edges_to_stitch.append(edge)
+
+	# Collect West Edge indices (x = 0)
+	if stitch_west:
+		var edge := PackedInt32Array()
+		for y in range(num_vertices):
+			edge.push_back(y * num_vertices)
+		edges_to_stitch.append(edge)
+
+	# Collect East Edge indices (x = grid_size)
+	if stitch_east:
+		var edge := PackedInt32Array()
+		for y in range(num_vertices):
+			edge.push_back(grid_size + y * num_vertices)
+		edges_to_stitch.append(edge)
+
+	# Execute the single, unified flattening loop across all flagged edges
+	for edge_indices in edges_to_stitch:
+		# Step by 2 to target only the odd vertices (1, 3, 5...) 
+		# This leaves the corner anchors (0 and grid_size) untouched!
+		for i in range(1, edge_indices.size() - 1, 2):
+			var prev_idx = edge_indices[i - 1]
+			var curr_idx = edge_indices[i]
+			var next_idx = edge_indices[i + 1]
+			
+			# Flatten the odd vertex exactly halfway between its neighbor even vertices
+			vertices[curr_idx] = vertices[prev_idx].lerp(vertices[next_idx], 0.5)
+			
+			# Average the normals and colors to keep the lighting and textures seamless
+			normals[curr_idx] = (normals[prev_idx] + normals[next_idx]).normalized()
+			colors[curr_idx] = colors[prev_idx].lerp(colors[next_idx], 0.5)
 	
 	for y in range(grid_size):
 		for x in range(grid_size):
