@@ -48,7 +48,9 @@ var atmosphere: MeshInstance3D
 var sun_orbit_angle: float = 0.0
 
 func _ready() -> void:
-	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAMEwww
+	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+	
+	$Player.global_position = $Camera.global_position
 	
 	planet_seed = randi()
 	#generate_world_texture()
@@ -127,6 +129,36 @@ func _process(delta: float) -> void:
 		orbit_speed += 0.05
 	if Input.is_key_pressed(KEY_MINUS):
 		orbit_speed = max(orbit_speed - 0.05, 0.0)
+	
+	#Temp
+	if Input.is_action_just_pressed("ui_left"):
+		var forward = -$Player/CameraPivot/Camera3D.global_transform.basis.z
+		var up = $Player.global_position.normalized()
+		$Camera.global_transform = Transform3D(Basis.looking_at(forward, up), $Player/CameraPivot/Camera3D.global_position)
+		$Camera/Camera3D.rotation = Vector3.ZERO
+		$Camera/Camera3D.current = true
+		camera = $Camera/Camera3D
+		$Player.process_mode = Node.PROCESS_MODE_DISABLED
+		$Camera.process_mode = Node.PROCESS_MODE_INHERIT
+		$Player.active = false
+		$CanvasLayer/Label.visible = true
+	if Input.is_action_just_pressed("ui_right"):
+		$Player.global_position = $Camera.global_position
+		$Player.velocity = Vector3.ZERO
+		var up = $Player.global_position.normalized()
+		var camera_forward = -$Camera.global_transform.basis.z
+		var flat_forward = camera_forward - up * camera_forward.dot(up)
+		if flat_forward.length() > 0.001:
+			flat_forward = flat_forward.normalized()
+			$Player.look_direction = flat_forward
+		$Player.camera_pitch = asin(camera_forward.dot(up))
+		$Player/CameraPivot.rotation.x = $Player.camera_pitch
+		$Player/CameraPivot/Camera3D.current = true
+		camera = $Player/CameraPivot/Camera3D
+		$Camera.process_mode = Node.PROCESS_MODE_DISABLED
+		$Player.process_mode = Node.PROCESS_MODE_INHERIT
+		$Player.active = true
+		$CanvasLayer/Label.visible = false
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)

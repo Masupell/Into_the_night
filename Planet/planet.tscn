@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cxwepqf8u4p3s" path="res://Planet/planet.gd" id="1_06kw6"]
 [ext_resource type="Script" uid="uid://bimb2hbeu4ma2" path="res://Planet/camera.gd" id="2_m2dqj"]
+[ext_resource type="PackedScene" uid="uid://b6m6lb5ikaxd" path="res://temp/player.tscn" id="3_0v15i"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_m2dqj"]
 frequency = 0.0141
@@ -35,3 +36,5 @@ shape = SubResource("SphereShape3D_m2dqj")
 [node name="Label" type="Label" parent="CanvasLayer" unique_id=1031283555]
 offset_right = 40.0
 offset_bottom = 23.0
+
+[node name="Player" parent="." unique_id=1752264425 instance=ExtResource("3_0v15i")]
