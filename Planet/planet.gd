@@ -151,7 +151,7 @@ func _process(delta: float) -> void:
 		if flat_forward.length() > 0.001:
 			flat_forward = flat_forward.normalized()
 			$Player.look_direction = flat_forward
-		$Player.camera_pitch = asin(camera_forward.dot(up))
+		$Player.camera_pitch = -asin(camera_forward.dot(up))
 		$Player/CameraPivot.rotation.x = $Player.camera_pitch
 		$Player/CameraPivot/Camera3D.current = true
 		camera = $Player/CameraPivot/Camera3D
