@@ -3,7 +3,7 @@ extends MeshInstance3D
 
 var water_mesh_instance: MeshInstance3D
 
-func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool):
+func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool):
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
@@ -130,32 +130,24 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 		if child is StaticBody3D:
 			child.queue_free()
 	
-	var static_body := StaticBody3D.new()
-	add_child(static_body)
+	if needs_collision:
+		var static_body := StaticBody3D.new()
+		add_child(static_body)
+		
+		var collision_shape := CollisionShape3D.new()
+		collision_shape.shape = new_mesh.create_trimesh_shape()
+		static_body.add_child(collision_shape)
 	
-	var collision_shape := CollisionShape3D.new()
-	collision_shape.shape = new_mesh.create_trimesh_shape()
-	static_body.add_child(collision_shape)
+	self.material_override = planet.terrain_material
 	
-	var material := ShaderMaterial.new()
-	material.shader = preload("res://Planet/planet.gdshader")
-	material.set_shader_parameter("world_map", planet.world_texture)
-	self.material_override = material
-	
-	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.08)
+	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.08, planet.water_material)
 
 
-func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float):
+func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float, water_material):
 	if min_terrain_height > (sea_level_ratio + 0.1):
 		if water_mesh_instance:
 			water_mesh_instance.mesh = null
 		return
-	
-	if not water_mesh_instance:
-		water_mesh_instance = MeshInstance3D.new()
-		add_child(water_mesh_instance)
-	else:
-		water_mesh_instance.mesh = null
 	
 	if not water_mesh_instance:
 		water_mesh_instance = MeshInstance3D.new()
@@ -216,9 +208,7 @@ func build_water_mesh(corners: Array, grid_size: int, radius: float, height: flo
 	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_array)
 	water_mesh_instance.mesh = new_mesh
 	
-	var water_mat = ShaderMaterial.new()
-	water_mat.shader = preload("res://Planet/water.gdshader")
-	water_mesh_instance.material_override = water_mat
+	water_mesh_instance.material_override = water_material
 
 
 static func spherify(p: Vector3) -> Vector3:

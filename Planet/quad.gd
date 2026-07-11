@@ -209,7 +209,10 @@ func draw_chunk():
 	var stitch_e = e_nb != null and e_nb.level < level
 	var stitch_w = w_nb != null and w_nb.level < level
 	
-	chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w)
+	var dist_to_player = bounding_center.distance_squared_to(planet.camera.global_position)
+	var needs_collision = dist_to_player < 90000.0 
+	
+	chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0

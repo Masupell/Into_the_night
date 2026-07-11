@@ -47,6 +47,9 @@ var atmosphere: MeshInstance3D
 
 var sun_orbit_angle: float = 0.0
 
+var terrain_material: ShaderMaterial
+var water_material: ShaderMaterial
+
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
 	
@@ -62,6 +65,13 @@ func _ready() -> void:
 	detail_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	detail_noise.fractal_octaves = 4
 	detail_noise.fractal_gain = 0.5
+	
+	terrain_material = ShaderMaterial.new()
+	terrain_material.shader = preload("res://Planet/planet.gdshader")
+	terrain_material.set_shader_parameter("world_map", world_texture)
+	
+	water_material = ShaderMaterial.new()
+	water_material.shader = preload("res://Planet/water.gdshader")
 	
 	atmosphere = MeshInstance3D.new()
 	var atmosphere_radius: float = radius + max_height + 200.0
