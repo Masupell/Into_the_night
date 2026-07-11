@@ -57,7 +57,8 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 	else:
 		if not children.is_empty():
 			merge()
-		draw_chunk()
+		if chunk == null:
+			draw_chunk()
 
 func test_frustum(frustum_planes: Array) -> int:
 	var fully_inside_count := 0
@@ -156,10 +157,17 @@ func refresh_neighbors():
 	]
 	
 	for neighbor in neighbors:
-		if neighbor != null and neighbor.chunk != null:
+		if neighbor != null:
 			# recalculating entire chunk right now, can't just change specific vertices, 
 			# because of collision mesh and gpu uploading makes this faster anyways
-			neighbor.draw_chunk() 
+			neighbor.force_rebuild_leaves()
+
+func force_rebuild_leaves():
+	if chunk != null:
+		draw_chunk()
+	else:
+		for child in children:
+			child.force_rebuild_leaves()
 
 func split():
 	var m01 = corners[0].lerp(corners[1], 0.5) # Top
