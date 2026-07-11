@@ -151,7 +151,9 @@ func _process(delta: float) -> void:
 		if flat_forward.length() > 0.001:
 			flat_forward = flat_forward.normalized()
 			$Player.look_direction = flat_forward
-		$Player.camera_pitch = -asin(camera_forward.dot(up))
+			$Player.basis = Basis.looking_at(flat_forward, up)
+			var local_forward = $Player.global_transform.basis.inverse() * camera_forward
+			$Player.camera_pitch = atan2(local_forward.y, -local_forward.z)
 		$Player/CameraPivot.rotation.x = $Player.camera_pitch
 		$Player/CameraPivot/Camera3D.current = true
 		camera = $Player/CameraPivot/Camera3D
@@ -209,7 +211,7 @@ static func get_uv_from_vector(pos: Vector3) -> Vector2:
 	return Vector2(u, v)
 
 func world_from_texture():
-	world_image = Image.load_from_file("res://temp/earth_map.png")
+	world_image = load("res://temp/earth_map.png").get_image()#Image.load_from_file("res://temp/earth_map.png")
 	world_texture = ImageTexture.create_from_image(world_image)
 
 func generate_world_texture():
