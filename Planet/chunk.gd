@@ -3,7 +3,103 @@ extends MeshInstance3D
 
 var water_mesh_instance: MeshInstance3D
 
-func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool):
+var active_task_id: int = -1
+var generation_id: int = 1
+
+var is_pending_recycle: bool = false
+var is_ready: bool = false
+
+var planet: Planet # Easier with reference right now
+
+func _process(_delta: float) -> void:
+	if active_task_id != -1:
+		if WorkerThreadPool.is_task_completed(active_task_id):
+			WorkerThreadPool.wait_for_task_completion(active_task_id)
+			active_task_id = -1
+			
+			if is_pending_recycle:
+				is_pending_recycle = false
+				completely_reset_and_return()
+
+
+func recycle():
+	generation_id += 1 
+	visible = false
+	
+	if active_task_id != -1:
+		is_pending_recycle = true
+	else:
+		completely_reset_and_return()
+
+
+func completely_reset_and_return():
+	self.mesh = null
+	is_ready = false
+	if water_mesh_instance:
+		water_mesh_instance.mesh = null
+		
+	for child in get_children():
+		if child is StaticBody3D:
+			child.queue_free()
+	planet.return_chunk(self)
+
+
+# On Main Thread
+func apply_generation_results(total_data: Dictionary):
+	if total_data["gen_id"] != generation_id:
+		return
+	
+	var terrain_data = total_data["terrain"]
+	var water_data = total_data["water"]
+	
+	# Terrain
+	var terrain_mesh = ArrayMesh.new()
+	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data)
+	self.mesh = terrain_mesh
+	
+	for child in get_children():
+		if child is StaticBody3D:
+			child.queue_free()
+	
+	if total_data["needs_collision"]:
+		var static_body := StaticBody3D.new()
+		add_child(static_body)
+		
+		var collision_shape := CollisionShape3D.new()
+		collision_shape.shape = terrain_mesh.create_trimesh_shape()
+		static_body.add_child(collision_shape)
+	
+	self.material_override = planet.terrain_material
+	
+	
+	# Water
+	if not water_data["should_render"]:
+		if water_mesh_instance:
+			water_mesh_instance.mesh = null
+	else:
+		if not water_mesh_instance:
+			water_mesh_instance = MeshInstance3D.new()
+			add_child(water_mesh_instance)
+		
+		var water_mesh = ArrayMesh.new()
+		water_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, water_data["mesh_array"])
+		water_mesh_instance.mesh = water_mesh
+		
+		water_mesh_instance.material_override = planet.water_material
+	is_ready = true
+
+
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool):
+	var data = calculate_terrain_mesh(detail_noise, world_texture, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west)
+	var total_data = {
+		"gen_id": gen_id,
+		"needs_collision": needs_collision,
+		"terrain": data["mesh_array"],
+		"water": data["water_data"]
+	}
+	chunk_instance.apply_generation_results.call_deferred(total_data)
+
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
@@ -38,18 +134,18 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			var sphere_point = spherify(cube_point)
 			sphere_points_cache[idx] = sphere_point
 			
-			var world_uv = planet.get_uv_from_vector(sphere_point)
+			var world_uv = get_uv_from_vector(sphere_point)
 			
-			var texture_data = sample_image_bilinear(planet.world_image, world_uv)
+			var texture_data = sample_image_bilinear(world_texture, world_uv)
 			var macro_height_ratio = texture_data.r
 			if macro_height_ratio < min_chunk_height:
 				min_chunk_height = macro_height_ratio
 			var macro_height = macro_height_ratio * height
 			
 			# A bit more detail, needs twaking, but first step
-			var large_detail = planet.detail_noise.get_noise_3dv(sphere_point * 80.0)
-			var medium_detail = planet.detail_noise.get_noise_3dv(sphere_point * 250.0)
-			var small_detail = planet.detail_noise.get_noise_3dv(sphere_point * 700.0)
+			var large_detail = detail_noise.get_noise_3dv(sphere_point * 80.0)
+			var medium_detail = detail_noise.get_noise_3dv(sphere_point * 250.0)
+			var small_detail = detail_noise.get_noise_3dv(sphere_point * 700.0)
 			
 			var detail = large_detail * 4.0 + medium_detail * 1.5 + small_detail * 0.4
 			var land = smoothstep(0.45, 0.5, macro_height_ratio)
@@ -64,7 +160,6 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 			vertices[idx] = vertex_pos
 			normals[idx] = sphere_point.normalized()
 			colors[idx] = Color(macro_height_ratio, 0.0, 0.0)
-	
 	
 	# This array will hold arrays of vertex indices that need stitching
 	var edges_to_stitch: Array[PackedInt32Array] = []
@@ -134,38 +229,16 @@ func build_mesh(planet: Node3D, corners: Array, grid_size: int, radius: float, h
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_COLOR] = colors
 	
-	var new_mesh = ArrayMesh.new()
-	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_array)
-	self.mesh = new_mesh
+	var water_data = calculate_water_mesh(grid_size, radius, height, min_chunk_height, 0.08, sphere_points_cache)
 	
-	for child in get_children():
-		if child is StaticBody3D:
-			child.queue_free()
-	
-	if needs_collision:
-		var static_body := StaticBody3D.new()
-		add_child(static_body)
-		
-		var collision_shape := CollisionShape3D.new()
-		collision_shape.shape = new_mesh.create_trimesh_shape()
-		static_body.add_child(collision_shape)
-	
-	self.material_override = planet.terrain_material
-	
-	build_water_mesh(corners, grid_size, radius, height, min_chunk_height, 0.08, planet.water_material, sphere_points_cache)
+	return {
+		"mesh_array": mesh_array,
+		"water_data": water_data
+	}
 
-
-func build_water_mesh(corners: Array, grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float, water_material: ShaderMaterial, sphere_points_cache: PackedVector3Array):
+static func calculate_water_mesh(grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float, sphere_points_cache: PackedVector3Array) -> Dictionary:
 	if min_terrain_height > (sea_level_ratio + 0.1):
-		if water_mesh_instance:
-			water_mesh_instance.mesh = null
-		return
-	
-	if not water_mesh_instance:
-		water_mesh_instance = MeshInstance3D.new()
-		add_child(water_mesh_instance)
-	else:
-		water_mesh_instance.mesh = null
+		return { "should_render": false }
 
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
@@ -220,11 +293,10 @@ func build_water_mesh(corners: Array, grid_size: int, radius: float, height: flo
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
 	
-	var new_mesh = ArrayMesh.new()
-	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_array)
-	water_mesh_instance.mesh = new_mesh
-	
-	water_mesh_instance.material_override = water_material
+	return {
+		"should_render": true,
+		"mesh_array": mesh_array
+	}
 
 
 static func spherify(p: Vector3) -> Vector3:
@@ -238,8 +310,16 @@ static func spherify(p: Vector3) -> Vector3:
 	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 	return res
 
+static func get_uv_from_vector(pos: Vector3) -> Vector2:
+	var n = pos.normalized()
+	var phi = atan2(n.z, n.x)
+	var theta = asin(n.y)
+	
+	var u = (phi + PI) / (2.0 * PI)
+	var v = (theta + PI / 2.0) / PI
+	return Vector2(u, v)
 
-func sample_image_bilinear(img: Image, uv: Vector2) -> Color:
+static func sample_image_bilinear(img: Image, uv: Vector2) -> Color:
 	var width = img.get_width()
 	var height = img.get_height()
 	

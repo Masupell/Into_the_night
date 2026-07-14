@@ -53,12 +53,25 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 			split()
 		for child in children:
 			child.update_lod(camera_pos, frustum_planes)
-		remove_chunk()
+		if are_children_ready():
+			remove_chunk()
 	else:
-		if not children.is_empty():
-			merge()
 		if chunk == null:
 			draw_chunk()
+		if chunk != null and chunk.is_ready:
+			if not children.is_empty():
+				merge()
+
+func are_children_ready() -> bool:
+	if children.is_empty():
+		return false
+	for child in children:
+		if not child.children.is_empty():
+			if not child.are_children_ready():
+				return false
+		elif child.chunk == null or not child.chunk.is_ready:
+			return false
+	return true
 
 func test_frustum(frustum_planes: Array) -> int:
 	var fully_inside_count := 0
@@ -191,13 +204,18 @@ func merge():
 
 func remove_chunk():
 	if chunk:
-		#chunk.queue_free()
-		planet.return_chunk(chunk)
+		#chunk.generation_id += 1
+		#if chunk.active_task_id != -1:
+			#WorkerThreadPool.wait_for_task_completion(chunk.active_task_id)
+			#chunk.active_task_id = -1
+		#planet.return_chunk(chunk)
+		chunk.recycle()
 		chunk = null
 
 func draw_chunk():
 	if chunk == null:
 		chunk = planet.request_chunk()
+	chunk.generation_id += 1
 	
 	var n_nb = get_neighbor_north()
 	var s_nb = get_neighbor_south()
@@ -212,7 +230,9 @@ func draw_chunk():
 	var dist_to_player = bounding_center.distance_squared_to(planet.camera.global_position)
 	var needs_collision = dist_to_player < 90000.0 
 	
-	chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
+	chunk.planet = planet
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.world_image, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision))
+	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0

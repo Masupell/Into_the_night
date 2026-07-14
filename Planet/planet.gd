@@ -196,7 +196,7 @@ func request_chunk() -> Chunk:
 
 func return_chunk(c: Chunk):
 	c.visible = false
-	c.mesh = null
+	#c.mesh = null
 	free_chunks.append(c)
 	#if c.get_parent():
 		#c.get_parent().remove_child(c)
