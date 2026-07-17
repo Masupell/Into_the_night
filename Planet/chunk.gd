@@ -9,6 +9,9 @@ var generation_id: int = 1
 var is_pending_recycle: bool = false
 var is_ready: bool = false
 
+var redraw_requested: bool = false
+var owner_quad: Quad = null
+
 var planet: Planet # Easier with reference right now
 
 func _process(_delta: float) -> void:
@@ -20,6 +23,10 @@ func _process(_delta: float) -> void:
 			if is_pending_recycle:
 				is_pending_recycle = false
 				completely_reset_and_return()
+			elif redraw_requested:
+				redraw_requested = false
+				if owner_quad:
+					owner_quad.draw_chunk()
 
 
 func recycle():
@@ -35,9 +42,10 @@ func recycle():
 func completely_reset_and_return():
 	self.mesh = null
 	is_ready = false
+	redraw_requested = false
+	owner_quad = null
 	if water_mesh_instance:
 		water_mesh_instance.mesh = null
-		
 	for child in get_children():
 		if child is StaticBody3D:
 			child.queue_free()

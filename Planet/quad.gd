@@ -183,18 +183,25 @@ func force_rebuild_leaves():
 			child.force_rebuild_leaves()
 
 func split():
-	var m01 = corners[0].lerp(corners[1], 0.5) # Top
-	var m12 = corners[1].lerp(corners[2], 0.5) # Right
-	var m23 = corners[2].lerp(corners[3], 0.5) # Bottom
-	var m30 = corners[3].lerp(corners[0], 0.5) # Left
-	var m_mid = corners[0].lerp(corners[2], 0.5) # Center
-	
-	children.append(Quad.new(planet, level + 1, [corners[0], m01, m_mid, m30], self, Type.TOP_LEFT)) # TopLeft
-	children.append(Quad.new(planet, level + 1, [m01, corners[1], m12, m_mid], self, Type.TOP_RIGHT)) # TopRight
-	children.append(Quad.new(planet, level + 1, [m_mid, m12, corners[2], m23], self, Type.BOTTOM_RIGHT)) # BottomRight
-	children.append(Quad.new(planet, level + 1, [m30, m_mid, m23, corners[3]], self, Type.BOTTOM_LEFT)) # BottomLeft
-	
-	refresh_neighbors()
+	if children.is_empty():
+		ensure_neighbors_within_one_level()
+		var m01 = corners[0].lerp(corners[1], 0.5) # Top
+		var m12 = corners[1].lerp(corners[2], 0.5) # Right
+		var m23 = corners[2].lerp(corners[3], 0.5) # Bottom
+		var m30 = corners[3].lerp(corners[0], 0.5) # Left
+		var m_mid = corners[0].lerp(corners[2], 0.5) # Center
+		
+		children.append(Quad.new(planet, level + 1, [corners[0], m01, m_mid, m30], self, Type.TOP_LEFT)) # TopLeft
+		children.append(Quad.new(planet, level + 1, [m01, corners[1], m12, m_mid], self, Type.TOP_RIGHT)) # TopRight
+		children.append(Quad.new(planet, level + 1, [m_mid, m12, corners[2], m23], self, Type.BOTTOM_RIGHT)) # BottomRight
+		children.append(Quad.new(planet, level + 1, [m30, m_mid, m23, corners[3]], self, Type.BOTTOM_LEFT)) # BottomLeft
+		
+		refresh_neighbors()
+
+func ensure_neighbors_within_one_level():
+	for neighbor in [get_neighbor_north(), get_neighbor_south(), get_neighbor_east(), get_neighbor_west()]:
+		if neighbor != null and neighbor.level < level and neighbor.children.is_empty():
+			neighbor.split()
 
 func merge():
 	for child in children:
@@ -215,6 +222,13 @@ func remove_chunk():
 func draw_chunk():
 	if chunk == null:
 		chunk = planet.request_chunk()
+	
+	if chunk.active_task_id != -1:
+		chunk.redraw_requested = true
+		chunk.owner_quad = self
+		return
+	
+	chunk.owner_quad = self
 	chunk.generation_id += 1
 	
 	var n_nb = get_neighbor_north()
