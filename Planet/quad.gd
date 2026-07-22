@@ -21,6 +21,8 @@ var parent_quad: Quad
 enum Type {TOP_LEFT = 0, TOP_RIGHT = 1, BOTTOM_RIGHT = 2, BOTTOM_LEFT = 3, ROOT = -1}
 var quad_type: Type = Type.ROOT
 
+#var highest_lod: int = 0
+
 func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, _type: Type = Type.ROOT) -> void:
 	self.planet = _planet
 	self.level = _level
@@ -244,8 +246,13 @@ func draw_chunk():
 	var dist_to_player = bounding_center.distance_squared_to(planet.camera.global_position)
 	var needs_collision = dist_to_player < 90000.0 
 	
+	#if level > highest_lod:
+		#highest_lod = level
+		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
+		#print(level, " ", chunk_world_size)
+	
 	chunk.planet = planet
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.world_image, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.world_image, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
 func calculate_bounds():

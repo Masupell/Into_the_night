@@ -97,8 +97,8 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool):
-	var data = calculate_terrain_mesh(detail_noise, world_texture, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west)
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
+	var data = calculate_terrain_mesh(detail_noise, world_texture, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
 	var total_data = {
 		"gen_id": gen_id,
 		"needs_collision": needs_collision,
@@ -107,22 +107,28 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 	}
 	chunk_instance.apply_generation_results.call_deferred(total_data)
 
-static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool) -> Dictionary:
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
 	var num_vertices = grid_size + 1
 	var total_vertices = num_vertices * num_vertices
 	
+	var skirt_vertex_count = num_vertices * 4
+	var total_vertices_all = total_vertices + skirt_vertex_count
+	var main_index_count = grid_size * grid_size * 6
+	var skirt_index_count = grid_size * 4 * 6
+	var total_index_count = main_index_count + skirt_index_count
+	
 	var vertices = PackedVector3Array()
 	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
 	var colors = PackedColorArray()
 	
-	vertices.resize(total_vertices)
-	indices.resize(grid_size*grid_size*6)
-	normals.resize(total_vertices)
-	colors.resize(total_vertices)
+	vertices.resize(total_vertices_all)
+	indices.resize(total_index_count)
+	normals.resize(total_vertices_all)
+	colors.resize(total_vertices_all)
 	
 	var sphere_points_cache = PackedVector3Array()
 	sphere_points_cache.resize(total_vertices)
@@ -169,50 +175,39 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: I
 			normals[idx] = sphere_point.normalized()
 			colors[idx] = Color(macro_height_ratio, 0.0, 0.0)
 	
-	# This array will hold arrays of vertex indices that need stitching
 	var edges_to_stitch: Array[PackedInt32Array] = []
-
-	# Collect North Edge indices (y = 0)
+	
 	if stitch_north:
 		var edge := PackedInt32Array()
 		for x in range(num_vertices):
 			edge.push_back(x)
 		edges_to_stitch.append(edge)
-
-	# Collect South Edge indices (y = grid_size)
+	
 	if stitch_south:
 		var edge := PackedInt32Array()
 		for x in range(num_vertices):
 			edge.push_back(x + grid_size * num_vertices)
 		edges_to_stitch.append(edge)
-
-	# Collect West Edge indices (x = 0)
+	
 	if stitch_west:
 		var edge := PackedInt32Array()
 		for y in range(num_vertices):
 			edge.push_back(y * num_vertices)
 		edges_to_stitch.append(edge)
-
-	# Collect East Edge indices (x = grid_size)
+	
 	if stitch_east:
 		var edge := PackedInt32Array()
 		for y in range(num_vertices):
 			edge.push_back(grid_size + y * num_vertices)
 		edges_to_stitch.append(edge)
-
-	# Execute the single, unified flattening loop across all flagged edges
+	
 	for edge_indices in edges_to_stitch:
-		# Step by 2 to target only the odd vertices (1, 3, 5...) 
-		# This leaves the corner anchors (0 and grid_size) untouched!
 		for i in range(1, edge_indices.size() - 1, 2):
 			var prev_idx = edge_indices[i - 1]
 			var curr_idx = edge_indices[i]
 			var next_idx = edge_indices[i + 1]
 			
-			# Flatten the odd vertex exactly halfway between its neighbor even vertices
 			vertices[curr_idx] = vertices[prev_idx].lerp(vertices[next_idx], 0.5)
-			
-			# Average the normals and colors to keep the lighting and textures seamless
 			normals[curr_idx] = (normals[prev_idx] + normals[next_idx]).normalized()
 			colors[curr_idx] = colors[prev_idx].lerp(colors[next_idx], 0.5)
 	
@@ -231,6 +226,99 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: I
 			indices[idx+3] = top_right
 			indices[idx+4] = bottom_right
 			indices[idx+5] = bottom_left
+	
+	
+	
+	# Skirt, so that the occasional still existing hole (nbo idea why though), dissapears
+	var north_offset = total_vertices
+	var south_offset = north_offset + num_vertices
+	var west_offset = south_offset + num_vertices
+	var east_offset = west_offset + num_vertices
+	
+	for x in range(num_vertices):
+		var src_idx = x # north edge, y = 0
+		var s_idx = north_offset + x
+		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		normals[s_idx] = normals[src_idx]
+		colors[s_idx] = colors[src_idx]
+	
+	for x in range(num_vertices):
+		var src_idx = x + grid_size * num_vertices # south edge
+		var s_idx = south_offset + x
+		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		normals[s_idx] = normals[src_idx]
+		colors[s_idx] = colors[src_idx]
+	
+	for y in range(num_vertices):
+		var src_idx = y * num_vertices # west edge
+		var s_idx = west_offset + y
+		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		normals[s_idx] = normals[src_idx]
+		colors[s_idx] = colors[src_idx]
+	
+	for y in range(num_vertices):
+		var src_idx = grid_size + y * num_vertices # east edge
+		var s_idx = east_offset + y
+		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		normals[s_idx] = normals[src_idx]
+		colors[s_idx] = colors[src_idx]
+	
+	var idx_ptr = main_index_count
+	
+	for x in range(grid_size):
+		var top_left = north_offset + x
+		var top_right = north_offset + x + 1
+		var bottom_left = x
+		var bottom_right = x + 1
+		indices[idx_ptr] = top_left
+		indices[idx_ptr+1] = top_right
+		indices[idx_ptr+2] = bottom_left
+		indices[idx_ptr+3] = top_right
+		indices[idx_ptr+4] = bottom_right
+		indices[idx_ptr+5] = bottom_left
+		idx_ptr += 6
+	
+	for x in range(grid_size):
+		var top_left = x + grid_size * num_vertices
+		var top_right = x + 1 + grid_size * num_vertices
+		var bottom_left = south_offset + x
+		var bottom_right = south_offset + x + 1
+		indices[idx_ptr] = top_left
+		indices[idx_ptr+1] = top_right
+		indices[idx_ptr+2] = bottom_left
+		indices[idx_ptr+3] = top_right
+		indices[idx_ptr+4] = bottom_right
+		indices[idx_ptr+5] = bottom_left
+		idx_ptr += 6
+	
+	for y in range(grid_size):
+		var top_left = west_offset + y
+		var top_right = y * num_vertices
+		var bottom_left = west_offset + y + 1
+		var bottom_right = (y+1) * num_vertices
+		indices[idx_ptr] = top_left
+		indices[idx_ptr+1] = top_right
+		indices[idx_ptr+2] = bottom_left
+		indices[idx_ptr+3] = top_right
+		indices[idx_ptr+4] = bottom_right
+		indices[idx_ptr+5] = bottom_left
+		idx_ptr += 6
+	
+	for y in range(grid_size):
+		var top_left = grid_size + y * num_vertices
+		var top_right = east_offset + y
+		var bottom_left = grid_size + (y+1) * num_vertices
+		var bottom_right = east_offset + y + 1
+		indices[idx_ptr] = top_left
+		indices[idx_ptr+1] = top_right
+		indices[idx_ptr+2] = bottom_left
+		indices[idx_ptr+3] = top_right
+		indices[idx_ptr+4] = bottom_right
+		indices[idx_ptr+5] = bottom_left
+		idx_ptr += 6
+	
+	
+	
 	
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = indices

@@ -3,8 +3,6 @@ extends Node3D
 
 @export var planet_seed: int = 0
 
-@export var resolution := 16
-
 @export var radius := 5000.0
 @export var max_height: float = 200.0#500.0
 
