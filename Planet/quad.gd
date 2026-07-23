@@ -252,7 +252,7 @@ func draw_chunk():
 		#print(level, " ", chunk_world_size)
 	
 	chunk.planet = planet
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.world_image, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.terrain_data, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
 func calculate_bounds():

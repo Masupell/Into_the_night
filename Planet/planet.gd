@@ -12,7 +12,7 @@ extends Node3D
 var detail_noise := FastNoiseLite.new()
 
 @export_group("", "")
-@export var max_lod_level := 16
+@export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
 
 @onready var chunk_container: Node3D = Node3D.new()
@@ -34,7 +34,8 @@ const CUBE_FACES: Array = [
 	[Vector3(-1,-1, 1), Vector3( 1,-1, 1), Vector3( 1,-1,-1), Vector3(-1,-1,-1)], # Bottom(-Y)
 ]
 
-var world_image: Image
+#var world_image: Image
+var terrain_data: TerrainData
 var world_texture: ImageTexture
 
 var atmosphere: MeshInstance3D
@@ -221,11 +222,16 @@ static func get_uv_from_vector(pos: Vector3) -> Vector2:
 	return Vector2(u, v)
 
 func world_from_texture():
-	world_image = load("res://temp/earth_map.png").get_image()#Image.load_from_file("res://temp/earth_map.png")
-	world_texture = ImageTexture.create_from_image(world_image)
+	terrain_data = TerrainData.new(2048, 2048)
+	var image = load("res://temp/earth_map.png").get_image()
+	terrain_data.load_from_image(image)
+	world_texture = ImageTexture.create_from_image(image)
+	#world_image = load("res://temp/earth_map.png").get_image()#Image.load_from_file("res://temp/earth_map.png")
+	#world_texture = ImageTexture.create_from_image(world_image)
 
 func generate_world_texture():
-	world_image = Image.create(2048, 2048, false, Image.FORMAT_RGBA8)
+	#world_image = Image.create(2048, 2048, false, Image.FORMAT_RGBA8)
+	terrain_data = TerrainData.new(2048, 2048)
 	
 	var continent_noise = FastNoiseLite.new()
 	continent_noise.seed = planet_seed
@@ -275,7 +281,11 @@ func generate_world_texture():
 			
 			final_height = clamp(final_height, 0.0, 1.0)
 			
-			world_image.set_pixel(x, y, Color(final_height, 1.0 if final_height < sea_level else 0.0, 0.0, 1.0))
+			terrain_data.set_height(x, y, final_height)
+			#world_image.set_pixel(x, y, Color(final_height, 1.0 if final_height < sea_level else 0.0, 0.0, 1.0))
 	
-	world_image.save_png("res://test/terrain.png")
-	world_texture = ImageTexture.create_from_image(world_image)
+	var preview = terrain_data.to_image()
+	preview.save_png("res://test/terrain.png")
+	world_texture = ImageTexture.create_from_image(preview)
+	#world_image.save_png("res://test/terrain.png")
+	#world_texture = ImageTexture.create_from_image(world_image)

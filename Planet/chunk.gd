@@ -97,8 +97,8 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
-	var data = calculate_terrain_mesh(detail_noise, world_texture, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, terrain_data: TerrainData, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
+	var data = calculate_terrain_mesh(detail_noise, terrain_data, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
 	var total_data = {
 		"gen_id": gen_id,
 		"needs_collision": needs_collision,
@@ -107,7 +107,7 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 	}
 	chunk_instance.apply_generation_results.call_deferred(total_data)
 
-static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: Image, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: TerrainData, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 	
@@ -150,8 +150,8 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, world_texture: I
 			
 			var world_uv = get_uv_from_vector(sphere_point)
 			
-			var texture_data = sample_image_bilinear(world_texture, world_uv)
-			var macro_height_ratio = texture_data.r
+			var macro_height_ratio = terrain_data.sample_bilinear(world_uv)#sample_image_bilinear(world_texture, world_uv)
+			#var macro_height_ratio = texture_data.r
 			if macro_height_ratio < min_chunk_height:
 				min_chunk_height = macro_height_ratio
 			var macro_height = macro_height_ratio * height
