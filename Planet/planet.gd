@@ -52,7 +52,8 @@ var water_material: ShaderMaterial
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
 	
-	$Player.global_position = $Camera.global_position
+	#$Player.global_position = $Camera.global_position
+	$Plane.global_position = $Camera.global_position
 	
 	planet_seed = randi()
 	#generate_world_texture()
@@ -141,35 +142,61 @@ func _process(delta: float) -> void:
 	
 	#Temp
 	if Input.is_action_just_pressed("ui_left"):
-		var forward = -$Player/CameraPivot/Camera3D.global_transform.basis.z
-		var up = $Player.global_position.normalized()
-		$Camera.global_transform = Transform3D(Basis.looking_at(forward, up), $Player/CameraPivot/Camera3D.global_position)
-		$Camera/Camera3D.rotation = Vector3.ZERO
+		var plane_camera = $Plane/Pivot/SpringArm3D/Camera3D
+		$Camera.global_transform = plane_camera.global_transform
 		$Camera/Camera3D.current = true
 		camera = $Camera/Camera3D
-		$Player.process_mode = Node.PROCESS_MODE_DISABLED
+		$Plane.process_mode = Node.PROCESS_MODE_DISABLED
 		$Camera.process_mode = Node.PROCESS_MODE_INHERIT
-		$Player.active = false
-		$CanvasLayer/Label.visible = true
+		#$Plane.active = false
+		#$CanvasLayer/Label.visible = true
 	if Input.is_action_just_pressed("ui_right"):
-		$Player.global_position = $Camera.global_position
-		$Player.velocity = Vector3.ZERO
-		var up = $Player.global_position.normalized()
-		var camera_forward = -$Camera.global_transform.basis.z
-		var flat_forward = camera_forward - up * camera_forward.dot(up)
-		if flat_forward.length() > 0.001:
-			flat_forward = flat_forward.normalized()
-			$Player.look_direction = flat_forward
-			$Player.basis = Basis.looking_at(flat_forward, up)
-			var local_forward = $Player.global_transform.basis.inverse() * camera_forward
-			$Player.camera_pitch = atan2(local_forward.y, -local_forward.z)
-		$Player/CameraPivot.rotation.x = $Player.camera_pitch
-		$Player/CameraPivot/Camera3D.current = true
-		camera = $Player/CameraPivot/Camera3D
+		$Plane.global_position = $Camera.global_position
+		$Plane.velocity = Vector3.ZERO
+		#
+		# Copy camera orientation directly to plane
+		#
+		$Plane.global_basis = $Camera.global_basis
+		#
+		# Make player camera match plane
+		#
+		#$Plane/CameraPivot.rotation = Vector3.ZERO
+		$Plane/Pivot/SpringArm3D/Camera3D.current = true
+		camera = $Plane/Pivot/SpringArm3D/Camera3D
 		$Camera.process_mode = Node.PROCESS_MODE_DISABLED
-		$Player.process_mode = Node.PROCESS_MODE_INHERIT
-		$Player.active = true
-		$CanvasLayer/Label.visible = false
+		$Plane.process_mode = Node.PROCESS_MODE_INHERIT
+		#$Plane.active = true
+		#$CanvasLayer/Label.visible = false
+	#if Input.is_action_just_pressed("ui_left"):
+		#var forward = -$Player/CameraPivot/Camera3D.global_transform.basis.z
+		#var up = $Player.global_position.normalized()
+		#$Camera.global_transform = Transform3D(Basis.looking_at(forward, up), $Player/CameraPivot/Camera3D.global_position)
+		#$Camera/Camera3D.rotation = Vector3.ZERO
+		#$Camera/Camera3D.current = true
+		#camera = $Camera/Camera3D
+		#$Player.process_mode = Node.PROCESS_MODE_DISABLED
+		#$Camera.process_mode = Node.PROCESS_MODE_INHERIT
+		#$Player.active = false
+		#$CanvasLayer/Label.visible = true
+	#if Input.is_action_just_pressed("ui_right"):
+		#$Player.global_position = $Camera.global_position
+		#$Player.velocity = Vector3.ZERO
+		#var up = $Player.global_position.normalized()
+		#var camera_forward = -$Camera.global_transform.basis.z
+		#var flat_forward = camera_forward - up * camera_forward.dot(up)
+		#if flat_forward.length() > 0.001:
+			#flat_forward = flat_forward.normalized()
+			#$Player.look_direction = flat_forward
+			#$Player.basis = Basis.looking_at(flat_forward, up)
+			#var local_forward = $Player.global_transform.basis.inverse() * camera_forward
+			#$Player.camera_pitch = atan2(local_forward.y, -local_forward.z)
+		#$Player/CameraPivot.rotation.x = $Player.camera_pitch
+		#$Player/CameraPivot/Camera3D.current = true
+		#camera = $Player/CameraPivot/Camera3D
+		#$Camera.process_mode = Node.PROCESS_MODE_DISABLED
+		#$Player.process_mode = Node.PROCESS_MODE_INHERIT
+		#$Player.active = true
+		#$CanvasLayer/Label.visible = false
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)

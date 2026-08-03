@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cxwepqf8u4p3s" path="res://Planet/planet.gd" id="1_06kw6"]
 [ext_resource type="Script" uid="uid://bimb2hbeu4ma2" path="res://Planet/camera.gd" id="2_m2dqj"]
-[ext_resource type="PackedScene" uid="uid://b6m6lb5ikaxd" path="res://temp/player.tscn" id="3_0v15i"]
+[ext_resource type="PackedScene" uid="uid://clrkw476pp5vs" path="res://Plane/plane.tscn" id="3_0v15i"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_m2dqj"]
 frequency = 0.0141
@@ -14,15 +14,7 @@ radius = 1.5
 
 [node name="Planet" type="Node3D" unique_id=262084446]
 script = ExtResource("1_06kw6")
-planet_seed = null
-radius = null
-max_height = null
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
-max_lod_level = null
-grid_size = null
-lod_threshold_deg = null
-orbit_speed = null
-orbit_distance = null
 
 [node name="Camera" type="CharacterBody3D" parent="." unique_id=461413134]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
@@ -45,4 +37,4 @@ shape = SubResource("SphereShape3D_m2dqj")
 offset_right = 40.0
 offset_bottom = 23.0
 
-[node name="Player" parent="." unique_id=1752264425 instance=ExtResource("3_0v15i")]
+[node name="Plane" parent="." unique_id=155938384 instance=ExtResource("3_0v15i")]

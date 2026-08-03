@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://clrkw476pp5vs"]
+
+[ext_resource type="PackedScene" uid="uid://bjr7bmw8ndfjn" path="res://Plane/low_poly_plane/scene.gltf" id="1_q6h1r"]
+[ext_resource type="Script" uid="uid://b8ajagmymhfgj" path="res://Plane/plane.gd" id="2_3yy4i"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_3yy4i"]
+radius = 1.8
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_jqh3c"]
+
+[node name="Plane" unique_id=155938384 instance=ExtResource("1_q6h1r")]
+collision_layer = 2
+script = ExtResource("2_3yy4i")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." index="1" unique_id=1387107264]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.16127431, 1.8315586)
+shape = SubResource("SphereShape3D_3yy4i")
+
+[node name="Pivot" type="Node3D" parent="." index="2" unique_id=104700495]
+top_level = true
+
+[node name="SpringArm3D" type="SpringArm3D" parent="Pivot" index="0" unique_id=138537075]
+shape = SubResource("SphereShape3D_jqh3c")
+spring_length = 8.0
+
+[node name="Camera3D" type="Camera3D" parent="Pivot/SpringArm3D" index="0" unique_id=235900995]
+fov = 80.0
+far = 100000.0
