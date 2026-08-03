@@ -30,8 +30,6 @@ var ground_align_speed := 10.0
 @onready var spring_arm = $Pivot/SpringArm3D
 @onready var camera = $Pivot/SpringArm3D/Camera3D
 
-var last_up := Vector3.UP
-
 @onready var text = $"../CanvasLayer/Label"
 
 func _ready():
@@ -42,11 +40,6 @@ func _ready():
 	camera.position = Vector3.ZERO
 	
 	pivot.top_level = true
-	
-	if global_position.length_squared() > 0.001:
-		last_up = global_position.normalized()
-		var align_rotation = Quaternion(pivot.global_transform.basis.y, last_up)
-		pivot.global_transform.basis = Basis(align_rotation) * pivot.global_transform.basis
 
 
 func _physics_process(delta: float) -> void:
@@ -117,12 +110,18 @@ func _physics_process(delta: float) -> void:
 	
 	#Camera movement around Plane
 	pivot.global_position = global_position
+
+	var current_fwd = -pivot.global_transform.basis.z
+	var current_pitch = asin(clamp(current_fwd.dot(planet_up), -1.0, 1.0))
+	var right = current_fwd.cross(planet_up).normalized()
+	if right.length_squared() < 0.001:
+		right = pivot.global_transform.basis.x.slide(planet_up).normalized()
+	var level_fwd = planet_up.cross(right).normalized()
+	var clean_horizon = Basis(right, planet_up, -level_fwd)
+	var pitch_rot = Quaternion(right, current_pitch)
 	
-	if not planet_up.is_equal_approx(last_up):
-		var align_rotation = Quaternion(last_up, planet_up)
-		pivot.global_transform.basis = Basis(align_rotation) * pivot.global_transform.basis
-		pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
-		last_up = planet_up
+	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
+	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
 
 
 func _input(event):
@@ -140,5 +139,3 @@ func _input(event):
 		
 		var local_x = pivot.global_transform.basis.x
 		pivot.global_transform.basis = pivot.global_transform.basis.rotated(local_x, pitch_delta)
-		
-		pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
