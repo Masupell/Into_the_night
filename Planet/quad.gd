@@ -56,13 +56,17 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 		for child in children:
 			child.update_lod(camera_pos, frustum_planes)
 		if are_children_ready():
+			reveal_leaves()
 			remove_chunk()
 	else:
 		if chunk == null:
 			draw_chunk()
 		if chunk != null and chunk.is_ready:
 			if not children.is_empty():
+				chunk.visible = true
 				merge()
+			elif not chunk.visible and not has_active_ancestor_chunk():
+				chunk.visible = true
 
 func are_children_ready() -> bool:
 	if children.is_empty():
@@ -224,6 +228,7 @@ func remove_chunk():
 func draw_chunk():
 	if chunk == null:
 		chunk = planet.request_chunk()
+		chunk.visible = false
 	
 	if chunk.active_task_id != -1:
 		chunk.redraw_requested = true
@@ -254,6 +259,22 @@ func draw_chunk():
 	chunk.planet = planet
 	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.terrain_data, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
+
+func has_active_ancestor_chunk() -> bool:
+	var p = parent_quad
+	while p != null:
+		if p.chunk != null:
+			return true
+		p = p.parent_quad
+	return false
+
+func reveal_leaves():
+	if children.is_empty():
+		if chunk:
+			chunk.visible = true
+	else:
+		for child in children:
+			child.reveal_leaves()
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
