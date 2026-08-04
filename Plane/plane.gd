@@ -30,6 +30,10 @@ var ground_align_speed := 10.0
 @onready var spring_arm = $Pivot/SpringArm3D
 @onready var camera = $Pivot/SpringArm3D/Camera3D
 
+@onready var propellor = $Sketchfab_model/LowPolyPlane01_FBX/RootNode/Propeller/Object_7/Propeller_Plane_0
+@export var max_rotor_speed := 8.0 # rotations per second
+var rotor_speed := 0.0
+
 @onready var text = $"../CanvasLayer/Label"
 
 func _ready():
@@ -106,6 +110,13 @@ func _physics_process(delta: float) -> void:
 	global_transform.basis = global_transform.basis.orthonormalized()
 	
 	move_and_slide()
+	
+	
+	#Animation
+	var speed_percent = move_speed / max_speed
+	rotor_speed = ease(speed_percent, 0.5) * max_rotor_speed#lerp(0.0, max_rotor_speed, speed_percent)
+	
+	propellor.rotate_z(rotor_speed * TAU * delta)
 	
 	
 	#Camera movement around Plane
