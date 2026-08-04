@@ -5,7 +5,7 @@ extends CharacterBody3D
 @export var stall_speed := 30.0 # speed, where lift equals gravity (so no tipping down anymore)
 @export var lift_efficiency := 1.0 # heavier planes are more sluggish, fighter jets quite efficient
 
-@export var max_speed := 150.0
+@export var max_speed := 65.0
 @export var acceleration := 3.0
 
 @export var air_align_speed := 3.0
@@ -34,6 +34,27 @@ var ground_align_speed := 10.0
 @export var max_rotor_speed := 8.0 # rotations per second
 var rotor_speed := 0.0
 
+@onready var left_aileron = $Sketchfab_model/LowPolyPlane01_FBX/RootNode/LeftAileron
+@onready var right_aileron = $Sketchfab_model/LowPolyPlane01_FBX/RootNode/RightAileron
+@onready var elevator = $Sketchfab_model/LowPolyPlane01_FBX/RootNode/Elevator
+@onready var rudder = $Sketchfab_model/LowPolyPlane01_FBX/RootNode/Rudder
+
+# For Animation
+var animation_pitch := 0.0
+var animation_roll := 0.0
+var animation_yaw := 0.0
+
+const CONTROL_SPEED := 5.0
+
+@export var aileron_angle := 20.0
+@export var elevator_angle := 15.0
+@export var rudder_angle := 8.0
+
+var left_aileron_rest: Vector3
+var right_aileron_rest: Vector3
+var elevator_rest: Vector3
+var rudder_rest: Vector3
+
 @onready var text = $"../CanvasLayer/Label"
 
 func _ready():
@@ -44,6 +65,11 @@ func _ready():
 	camera.position = Vector3.ZERO
 	
 	pivot.top_level = true
+	
+	left_aileron_rest = left_aileron.rotation
+	right_aileron_rest = right_aileron.rotation
+	elevator_rest = elevator.rotation
+	rudder_rest = rudder.rotation
 
 
 func _physics_process(delta: float) -> void:
@@ -117,6 +143,34 @@ func _physics_process(delta: float) -> void:
 	rotor_speed = ease(speed_percent, 0.5) * max_rotor_speed#lerp(0.0, max_rotor_speed, speed_percent)
 	
 	propellor.rotate_z(rotor_speed * TAU * delta)
+	
+	animation_pitch = move_toward(animation_pitch, pitch_input, CONTROL_SPEED * delta)
+	animation_roll = move_toward(animation_roll, roll_input, CONTROL_SPEED * delta)
+	animation_yaw = move_toward(animation_yaw, yaw_input, CONTROL_SPEED * delta)
+	
+	left_aileron.rotation.x = lerp_angle(
+		left_aileron.rotation.x,
+		left_aileron_rest.x + deg_to_rad(20.0 * animation_roll),
+		delta * 10.0
+	)
+
+	right_aileron.rotation.x = lerp_angle(
+		right_aileron.rotation.x,
+		right_aileron_rest.x - deg_to_rad(20.0 * animation_roll),
+		delta * 10.0
+	)
+
+	elevator.rotation.x = lerp_angle(
+		elevator.rotation.x,
+		elevator_rest.x + deg_to_rad(15.0 * animation_pitch),
+		delta * 10.0
+	)
+
+	rudder.rotation.y = lerp_angle(
+		rudder.rotation.y,
+		rudder_rest.y + deg_to_rad(8.0 * animation_yaw),
+		delta * 10.0
+	)
 	
 	
 	#Camera movement around Plane

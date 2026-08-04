@@ -12,6 +12,21 @@ radius = 1.8
 collision_layer = 2
 script = ExtResource("2_3yy4i")
 
+[node name="Elevator" parent="Sketchfab_model/LowPolyPlane01_FBX/RootNode" parent_id_path=PackedInt32Array(1470428815) index="0" unique_id=347418709]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -1.1920929e-07, -0.18605977, -3.3598356)
+
+[node name="Propeller" parent="Sketchfab_model/LowPolyPlane01_FBX/RootNode" parent_id_path=PackedInt32Array(1470428815) index="1" unique_id=1617583012]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -1.8253922e-07, -0.194, 4.136755)
+
+[node name="Rudder" parent="Sketchfab_model/LowPolyPlane01_FBX/RootNode" parent_id_path=PackedInt32Array(1470428815) index="2" unique_id=958716209]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -7.450581e-09, 0.5834605, -3.4291222)
+
+[node name="Object_10" parent="Sketchfab_model/LowPolyPlane01_FBX/RootNode/Rudder" index="0" unique_id=921690072]
+transform = Transform3D(1, 0, 0, 0, -4.371137e-08, -0.9999996, 0, 0.9999996, -4.371137e-08, 5.5879354e-09, -3.4291224, -1.0017259)
+
+[node name="RightAileron" parent="Sketchfab_model/LowPolyPlane01_FBX/RootNode" parent_id_path=PackedInt32Array(1470428815) index="4" unique_id=1668189864]
+transform = Transform3D(0.98480767, -0.17364818, -7.590404e-09, 0, -4.3711385e-08, 1, -0.17364818, -0.98480767, -4.304731e-08, -4.228359, 0.6172592, 0.9474312)
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." index="1" unique_id=1387107264]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.16127431, 1.8315586)
 shape = SubResource("SphereShape3D_3yy4i")
