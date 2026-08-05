@@ -17,6 +17,7 @@ var bounding_center: Vector3
 var horizon_cos_alpha: float
 var horizon_sin_alpha: float
 var parent_quad: Quad
+var currently_visible: bool = true
 
 enum Type {TOP_LEFT = 0, TOP_RIGHT = 1, BOTTOM_RIGHT = 2, BOTTOM_LEFT = 3, ROOT = -1}
 var quad_type: Type = Type.ROOT
@@ -39,8 +40,8 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 	else:
 		frustum_state = FRUSTUM_INTERSECT
 	
-	var is_visible = is_above_horizon(camera_pos) and frustum_state != FRUSTUM_OUTSIDE
-	if not is_visible:
+	currently_visible = is_above_horizon(camera_pos) and frustum_state != FRUSTUM_OUTSIDE
+	if not currently_visible:
 		remove_chunk()
 		for child in children:
 			child.update_lod(camera_pos, frustum_planes)
@@ -72,6 +73,8 @@ func are_children_ready() -> bool:
 	if children.is_empty():
 		return false
 	for child in children:
+		if not child.currently_visible:
+			continue
 		if not child.children.is_empty():
 			if not child.are_children_ready():
 				return false
