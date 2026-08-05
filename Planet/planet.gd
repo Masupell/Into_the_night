@@ -250,7 +250,7 @@ static func get_uv_from_vector(pos: Vector3) -> Vector2:
 
 func world_from_texture():
 	terrain_data = TerrainData.new(2048, 2048)
-	var image = load("res://temp/earth_map.png").get_image()
+	var image = load("res://Planet/earth_map.png").get_image()
 	terrain_data.load_from_image(image)
 	world_texture = ImageTexture.create_from_image(image)
 	#world_image = load("res://temp/earth_map.png").get_image()#Image.load_from_file("res://temp/earth_map.png")
