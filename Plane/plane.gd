@@ -190,16 +190,26 @@ func _physics_process(delta: float) -> void:
 	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
 	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
 	
+	
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(global_position, Vector3.ZERO)
+	query.exclude = [self.get_rid()]
+	var result = space_state.intersect_ray(query)
+	var current_agl: float = -1.0
+	if result:
+		var hit_position: Vector3 = result.position
+		current_agl =global_position.distance_to(hit_position)
+	
 	# Hud
 	if hud:
 		var power = move_speed/max_speed
 		var current_speed = velocity.length()
-		var current_altitude = global_position.length() - planet_radius
+		var current_amsl = global_position.length() - planet_radius
 		var pitch_rad = asin(clamp(forward.dot(planet_up), -1.0, 1.0))
 		var pitch_deg = rad_to_deg(pitch_rad)
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
 		var roll_deg = rad_to_deg(roll_rad)
-		hud.update_metrics(power, current_speed, current_altitude, pitch_deg, roll_deg)
+		hud.update_metrics(power, current_speed, current_amsl, current_agl, pitch_deg, roll_deg)
 
 func _input(event):
 	if event is InputEventMouseMotion:
