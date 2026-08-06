@@ -16,6 +16,20 @@ func get_cardinal_direction(deg: float) -> String:
 	var index = int(round(deg / 45.0)) % 8
 	return directions[index]
 
+func get_day_phase(hours: float) -> String:
+	if hours >= 5.0 and hours < 7.0:
+		return "Dawn"
+	elif hours >= 7.0 and hours < 11.0:
+		return "Morning"
+	elif hours >= 11.0 and hours < 13.0:
+		return "Noon"
+	elif hours >= 13.0 and hours < 17.0:
+		return "AfterNoon"
+	elif hours >= 17.0 and hours < 19.0:
+		return "Dusk"
+	else:
+		return "Night"
+
 func update_metrics(power: float, speed_ms: float, heading_deg: float, altitude_amsl: float, altitude_agl: float, pitch_deg: float, roll_deg: float, time_hours: float):
 	var speed_kmh = speed_ms * 3.6
 	
@@ -39,5 +53,6 @@ func update_metrics(power: float, speed_ms: float, heading_deg: float, altitude_
 	
 	var hours = int(time_hours)
 	var minutes = int((time_hours-hours) * 60.0)
+	var phase = get_day_phase(time_hours)
 	
-	time_label.text = "Time: %02d:%02d" % [hours, minutes]
+	time_label.text = "Time: %02d:%02d (%s)" % [hours, minutes, phase]
