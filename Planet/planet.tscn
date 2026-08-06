@@ -30,10 +30,11 @@ script = ExtResource("1_06kw6")
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
 command_processor = NodePath("CommandProcessor")
 
-[node name="Camera" type="CharacterBody3D" parent="." unique_id=461413134]
+[node name="Camera" type="CharacterBody3D" parent="." unique_id=461413134 node_paths=PackedStringArray("console")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
 collision_layer = 2
 script = ExtResource("2_m2dqj")
+console = NodePath("../CommandConsule")
 
 [node name="Camera3D" type="Camera3D" parent="Camera" unique_id=1231585573]
 far = 100000.0
@@ -47,6 +48,7 @@ shape = SubResource("SphereShape3D_m2dqj")
 mesh = SubResource("SphereMesh_b00i1")
 
 [node name="Debug" type="Camera3D" parent="." unique_id=2118636890]
+far = 100000.0
 
 [node name="CommandConsule" parent="." unique_id=1685191752 instance=ExtResource("3_x7wbh")]
 

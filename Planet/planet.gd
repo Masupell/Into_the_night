@@ -24,6 +24,7 @@ var root_quads: Array[Quad] = []
 var split_distances: Array[float] = []
 
 @onready var camera = get_viewport().get_camera_3d()
+var camera_mode = 2
 
 const CUBE_FACES: Array = [
 	[Vector3(-1, 1, 1), Vector3( 1, 1, 1), Vector3( 1,-1, 1), Vector3(-1,-1, 1)], # Front (+Z)
@@ -115,7 +116,20 @@ func _ready() -> void:
 	
 	command_processor.register_command("time", cmd_time, 
 	"Sets local time or adjusts time speed.",
-	"/time set <HH:MM or number> Or /time speed <multiplier>")
+	"/time set <HH:MM or number or \n['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']> \nOr /time speed <multiplier>")
+	
+	command_processor.register_command("wireframe", cmd_wireframe,
+	"Enables or disables wireframe view",
+	"/wireframe <1 or 2> (1 for default no wireframe, 2 for wireframe)")
+	
+	command_processor.register_command("camera", cmd_camera,
+	"Switches between plane, freecam and debug cam",
+	"/camera <plane or freecam/free or debug or <1 or 2 or 3>")
+	
+	command_processor.register_command("atmosphere", cmd_atmosphere,
+	"Currently just show or hide", 
+	"/atmosphere <show or hide>")
+
 
 func _process(delta: float) -> void:
 	if not camera:
@@ -136,36 +150,6 @@ func _process(delta: float) -> void:
 	var mat = atmosphere.material_override as ShaderMaterial
 	if mat:
 		mat.set_shader_parameter("sun_dir", sun_dir)
-	
-	if Input.is_key_pressed(KEY_1):
-		get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
-	if Input.is_key_pressed(KEY_2):
-		get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
-	
-	#Temp
-	if Input.is_action_just_pressed("ui_left"): # switch to free_cam
-		var plane_camera = $Plane/Pivot/SpringArm3D/Camera3D
-		$Camera/Camera3D.rotation = Vector3.ZERO
-		$Camera.global_transform = plane_camera.global_transform
-		$Camera/Camera3D.current = true
-		camera = $Camera/Camera3D
-		$Camera.process_mode = Node.PROCESS_MODE_INHERIT
-		$CanvasLayer.visible = true
-		$FlightHud.visible = false
-	if Input.is_action_just_pressed("ui_right"): # switch to plane
-		var free_cam = $Camera/Camera3D
-		var pivot = $Plane/Pivot
-		var spring = $Plane/Pivot/SpringArm3D
-		pivot.global_basis = free_cam.global_basis
-		var forward = -free_cam.global_basis.z
-		$Plane.global_position = free_cam.global_position + forward * spring.spring_length
-		$Plane.global_basis = free_cam.global_basis
-		$Plane.velocity = Vector3.ZERO
-		$Plane/Pivot/SpringArm3D/Camera3D.current = true
-		camera = $Plane/Pivot/SpringArm3D/Camera3D
-		$Camera.process_mode = Node.PROCESS_MODE_DISABLED
-		$CanvasLayer.visible = false
-		$FlightHud.visible = true
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)
@@ -335,7 +319,21 @@ func cmd_time(args: Array[String]) -> String:
 			elif value_str.is_valid_float():
 				hours = value_str.to_float()
 			else:
-				return "Invalid time format. Use HH:MM or a number."
+				match value_str.to_lower():
+					"dawn":
+						hours = 5.0
+					"morning":
+						hours = 7.0
+					"noon":
+						hours = 12.0
+					"afternoon":
+						hours = 13.0
+					"dusk":
+						hours = 17.75
+					"night":
+						hours = 24.0
+					_:
+						return "Invalid Time. Use ['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']"
 			set_time_hours(hours)
 			var h_int = int(hours)
 			var m_int = int((hours - h_int) * 60.0)
@@ -350,3 +348,107 @@ func cmd_time(args: Array[String]) -> String:
 			return ""
 		_:
 			return "Unknown subcommand '%s'. Use 'set' or 'speed'." % sub_command
+
+func cmd_wireframe(args: Array[String]) -> String:
+	if args.is_empty():
+		return "Missing Arguments"
+	if args[0].is_valid_int():
+		var value = args[0].to_int()
+		if value == 1:
+			if not get_viewport().debug_draw == Viewport.DEBUG_DRAW_DISABLED:
+				get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
+				command_processor.console.add_message("[color=green]Wireframe mode disabled[/color]")
+			return ""
+		elif value == 2:
+			if not get_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME:
+				get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+				command_processor.console.add_message("[color=green]Wireframe mode enabled[/color]")
+			return ""
+		else:
+			return "Only '1' or '2'"
+	return "Invalid Number"
+
+func cmd_camera(args: Array[String]) -> String:
+	if args.is_empty():
+		return "Missing Arguments"
+	var value_str = args[0]
+	if value_str.is_valid_int():
+		match value_str.to_int():
+			1:
+				if camera_mode != 1:
+					switch_to_plane()
+					command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
+				return ""
+			2:
+				if camera_mode != 2:
+					switch_to_free()
+					command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
+				return ""
+			3:
+				if camera_mode != 3:
+					switch_to_free(true)
+					command_processor.console.add_message("[color=green]Switched to debug[/color]")
+				return ""
+			_:
+				return "Invalid Argument"
+	else:
+		match value_str.to_lower():
+			"plane":
+				if camera_mode != 1:
+					switch_to_plane()
+					command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
+				return ""
+			"free", "freecam":
+				if camera_mode != 2:
+					switch_to_free()
+					command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
+				return ""
+			"debug":
+				if camera_mode != 3:
+					switch_to_free(true)
+					command_processor.console.add_message("[color=green]Switched to debug[/color]")
+				return ""
+			_:
+				return "Invalid Argument"
+
+func switch_to_free(debug: bool = false):
+	var plane_camera = $Plane/Pivot/SpringArm3D/Camera3D
+	$Camera/Camera3D.rotation = Vector3.ZERO
+	$Camera.global_transform = plane_camera.global_transform
+	$Camera/Camera3D.current = true
+	camera = $Camera/Camera3D
+	$Camera.process_mode = Node.PROCESS_MODE_INHERIT
+	$CanvasLayer.visible = true
+	$FlightHud.visible = false
+	camera_mode = $Camera.set_debug_mode(debug)
+
+func switch_to_plane(): # kind of switches to plane from old free position, because I never changed the code her
+	var free_cam = $Camera/Camera3D
+	var pivot = $Plane/Pivot
+	var spring = $Plane/Pivot/SpringArm3D
+	pivot.global_basis = free_cam.global_basis
+	var forward = -free_cam.global_basis.z
+	$Plane.global_position = free_cam.global_position + forward * spring.spring_length
+	$Plane.global_basis = free_cam.global_basis
+	$Plane.velocity = Vector3.ZERO
+	$Plane/Pivot/SpringArm3D/Camera3D.current = true
+	camera = $Plane/Pivot/SpringArm3D/Camera3D
+	$Camera.process_mode = Node.PROCESS_MODE_DISABLED
+	$CanvasLayer.visible = false
+	$FlightHud.visible = true
+	camera_mode = 1
+
+func cmd_atmosphere(args: Array[String]) -> String:
+	if args.is_empty():
+		return "Missing Arguments"
+	match args[0].to_lower():
+		"show":
+			atmosphere.show()
+			command_processor.console.add_message("[color=green]Atmosphere Shown[/color]")
+			return ""
+		"hide":
+			atmosphere.hide()
+			command_processor.console.add_message("[color=green]Atmosphere Hidden[/color]")
+			return ""
+		_:
+			return "Invalid Argument"

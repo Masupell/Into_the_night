@@ -162,6 +162,7 @@ func _physics_process(delta: float) -> void:
 		pitch_input = 0.0
 		roll_input = 0.0
 		yaw_input = 0.0
+		velocity = (forward * move_speed) + (-planet_up * fall_speed)
 		move_and_slide()
 		return
 	
@@ -251,11 +252,6 @@ func _physics_process(delta: float) -> void:
 		rudder_rest.y + deg_to_rad(8.0 * animation_yaw),
 		delta * 10.0
 	)
-	
-	if Input.is_key_pressed(KEY_ESCAPE): 
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): 
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -272,3 +268,12 @@ func _input(event):
 		
 		var local_x = pivot.global_transform.basis.x
 		pivot.global_transform.basis = pivot.global_transform.basis.rotated(local_x, pitch_delta)
+	
+	
+	if event is InputEventKey and event.pressed and not event.is_echo():
+		if event.keycode == KEY_ESCAPE:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
