@@ -9,13 +9,14 @@ extends CanvasLayer
 #AGL = Above Ground Level
 @onready var agl_label: Label = $Control/MarginContainer/VBoxContainer/AGLLabel
 @onready var pitch_roll_label: Label = $Control/MarginContainer/VBoxContainer/PitchRollLabel
+@onready var time_label: Label = $Control/MarginContainer/VBoxContainer/TimeLabel
 
 func get_cardinal_direction(deg: float) -> String:
 	var directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 	var index = int(round(deg / 45.0)) % 8
 	return directions[index]
 
-func update_metrics(power: float, speed_ms: float, heading_deg: float, altitude_amsl: float, altitude_agl: float, pitch_deg: float, roll_deg: float):
+func update_metrics(power: float, speed_ms: float, heading_deg: float, altitude_amsl: float, altitude_agl: float, pitch_deg: float, roll_deg: float, time_hours: float):
 	var speed_kmh = speed_ms * 3.6
 	
 	motor_power_label.text = "Engine: %3d%%" % [power*100.0]
@@ -35,3 +36,8 @@ func update_metrics(power: float, speed_ms: float, heading_deg: float, altitude_
 	var roll_sign = "+" if roll_deg > 0 else ""
 	
 	pitch_roll_label.text = "Pitch: %s%.1f° -- Roll: %s%.1f°" % [pitch_sign, pitch_deg, roll_sign, roll_deg]
+	
+	var hours = int(time_hours)
+	var minutes = int((time_hours-hours) * 60.0)
+	
+	time_label.text = "Time: %02d:%02d" % [hours, minutes]

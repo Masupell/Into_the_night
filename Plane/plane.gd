@@ -1,3 +1,4 @@
+class_name AirPlane
 extends CharacterBody3D
 
 @export var gravity := 9.8
@@ -55,9 +56,10 @@ var right_aileron_rest: Vector3
 var elevator_rest: Vector3
 var rudder_rest: Vector3
 
-#@onready var text = $"../CanvasLayer/Label"
 @export var hud: FligthHUD
 @export var planet_radius: float = 5000.0
+
+@export var sun_light: DirectionalLight3D
 
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -83,10 +85,8 @@ func _physics_process(delta: float) -> void:
 	var thrust_input := 0.0
 	if Input.is_key_pressed(KEY_SHIFT):
 		thrust_input += 1.0
-		#text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
 	if Input.is_key_pressed(KEY_CTRL):
 		thrust_input -= 2.0
-		#text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
 	move_speed = clamp(move_speed + thrust_input * acceleration * delta, 0.0, max_speed)
 	
 	var forward = global_transform.basis.z
@@ -200,8 +200,10 @@ func _physics_process(delta: float) -> void:
 		var hit_position: Vector3 = result.position
 		current_agl =global_position.distance_to(hit_position)
 	
+	
+	var world_north_pole = Vector3.DOWN # 'DOWN' Works better here, dont have to reverse sun rotation or planet generation
+	
 	#Compass
-	var world_north_pole = Vector3.UP
 	var surface_north = world_north_pole.slide(planet_up).normalized()
 	if surface_north.length_squared() < 0.001:
 		surface_north = Vector3.FORWARD.slide(planet_up).normalized()
@@ -209,7 +211,20 @@ func _physics_process(delta: float) -> void:
 	var heading_forward = forward.slide(planet_up).normalized()
 	
 	var heading_rad = atan2(heading_forward.dot(surface_east), heading_forward.dot(surface_north))
-	var heading_deg = wrapf(rad_to_deg(heading_rad), 0.0, 360.0)
+	var heading_deg = wrapf(360.0 - rad_to_deg(heading_rad), 0.0, 360.0) #subtract value from 360, so it lines up with real life, clockwise rotation increases degree
+	
+	#Time
+	var current_time_hours: float = 0.0
+	if sun_light:
+		# DirectionalLight3D shines along -Z axis, so from planet to light it is +Z
+		var sun_dir = sun_light.global_transform.basis.z.normalized()
+		var plane_equator = planet_up.slide(world_north_pole).normalized()
+		var sun_equator = sun_dir.slide(world_north_pole).normalized()
+		var plane_sun_cross = plane_equator.cross(sun_equator)
+		var plane_sun_dot = plane_equator.dot(sun_equator)
+		var angle_rad = atan2(plane_sun_cross.dot(world_north_pole), plane_sun_dot)
+		# Map angle to 24h time
+		current_time_hours = wrapf(12.0 + (angle_rad / TAU * 24.0), 0.0, 24.0)
 	
 	# Hud
 	if hud:
@@ -220,7 +235,7 @@ func _physics_process(delta: float) -> void:
 		var pitch_deg = rad_to_deg(pitch_rad)
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
 		var roll_deg = rad_to_deg(roll_rad)
-		hud.update_metrics(power, current_speed, heading_deg, current_amsl, current_agl, pitch_deg, roll_deg)
+		hud.update_metrics(power, current_speed, heading_deg, current_amsl, current_agl, pitch_deg, roll_deg, current_time_hours)
 	
 	if Input.is_key_pressed(KEY_ESCAPE): 
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
