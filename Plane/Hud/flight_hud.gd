@@ -3,17 +3,27 @@ extends CanvasLayer
 
 @onready var motor_power_label: Label = $Control/MarginContainer/VBoxContainer/MotorPowerLabel
 @onready var speed_label: Label = $Control/MarginContainer/VBoxContainer/SpeedLabel
+@onready var compass_label: Label = $Control/MarginContainer/VBoxContainer/CompassLabel
 #AMSL = Above Mean Sea Level
 @onready var altitude_label: Label = $Control/MarginContainer/VBoxContainer/AltitudeLabel
 #AGL = Above Ground Level
 @onready var agl_label: Label = $Control/MarginContainer/VBoxContainer/AGLLabel
 @onready var pitch_roll_label: Label = $Control/MarginContainer/VBoxContainer/PitchRollLabel
 
-func update_metrics(power: float, speed_ms: float, altitude_amsl: float, altitude_agl: float, pitch_deg: float, roll_deg: float):
+func get_cardinal_direction(deg: float) -> String:
+	var directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+	var index = int(round(deg / 45.0)) % 8
+	return directions[index]
+
+func update_metrics(power: float, speed_ms: float, heading_deg: float, altitude_amsl: float, altitude_agl: float, pitch_deg: float, roll_deg: float):
 	var speed_kmh = speed_ms * 3.6
 	
 	motor_power_label.text = "Engine: %3d%%" % [power*100.0]
 	speed_label.text = "Speed: %3dkm/h (%dm/s)" % [speed_kmh, speed_ms]
+	
+	var cardinal = get_cardinal_direction(heading_deg)
+	compass_label.text = "Direction: %03d° (%s)" % [heading_deg, cardinal] 
+	
 	altitude_label.text = "Altitude (AMSL): %3dm" % [max(0.0, altitude_amsl)] # Not exactly sealevel, because the water is a little higher still, but fine for now
 	
 	if altitude_agl >= 0.0:

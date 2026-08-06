@@ -190,7 +190,7 @@ func _physics_process(delta: float) -> void:
 	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
 	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
 	
-	
+	# Raycast for above ground height measure
 	var space_state = get_world_3d().direct_space_state
 	var query = PhysicsRayQueryParameters3D.create(global_position, Vector3.ZERO)
 	query.exclude = [self.get_rid()]
@@ -199,6 +199,17 @@ func _physics_process(delta: float) -> void:
 	if result:
 		var hit_position: Vector3 = result.position
 		current_agl =global_position.distance_to(hit_position)
+	
+	#Compass
+	var world_north_pole = Vector3.UP
+	var surface_north = world_north_pole.slide(planet_up).normalized()
+	if surface_north.length_squared() < 0.001:
+		surface_north = Vector3.FORWARD.slide(planet_up).normalized()
+	var surface_east = planet_up.cross(surface_north).normalized()
+	var heading_forward = forward.slide(planet_up).normalized()
+	
+	var heading_rad = atan2(heading_forward.dot(surface_east), heading_forward.dot(surface_north))
+	var heading_deg = wrapf(rad_to_deg(heading_rad), 0.0, 360.0)
 	
 	# Hud
 	if hud:
@@ -209,7 +220,7 @@ func _physics_process(delta: float) -> void:
 		var pitch_deg = rad_to_deg(pitch_rad)
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
 		var roll_deg = rad_to_deg(roll_rad)
-		hud.update_metrics(power, current_speed, current_amsl, current_agl, pitch_deg, roll_deg)
+		hud.update_metrics(power, current_speed, heading_deg, current_amsl, current_agl, pitch_deg, roll_deg)
 	
 	if Input.is_key_pressed(KEY_ESCAPE): 
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
