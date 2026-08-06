@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://dpmivd6uisae0"]
 
 [ext_resource type="Script" uid="uid://cmweph574n3l" path="res://Chat/command_consule.gd" id="1_qyuae"]
-[ext_resource type="Script" uid="uid://d4nlbeiwft36b" path="res://Chat/command_processor.gd" id="2_5li8a"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_5li8a"]
 
@@ -47,6 +46,3 @@ alignment = 2
 layout_mode = 2
 theme_override_styles/normal = SubResource("StyleBoxEmpty_5li8a")
 theme_override_styles/focus = SubResource("StyleBoxEmpty_qyuae")
-
-[node name="CommandProcessor" type="Node" parent="." unique_id=511517767]
-script = ExtResource("2_5li8a")

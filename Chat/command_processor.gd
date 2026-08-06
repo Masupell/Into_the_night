@@ -13,7 +13,7 @@ class Command:
 		description = _description
 		usage = _usage
 
-@onready var console = $".."
+@export var console: CommandConsule
 
 var registered_commands: Dictionary = {}
 func _ready() -> void:

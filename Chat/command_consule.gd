@@ -28,6 +28,10 @@ func _input(event: InputEvent) -> void:
 			if not is_open:
 				open_console()
 				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_SLASH:
+			if not is_open:
+				open_console("/")
+				get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_ESCAPE and is_open:
 			close_console()
 			get_viewport().set_input_as_handled()
@@ -41,9 +45,11 @@ func _input(event: InputEvent) -> void:
 				scroll_container.scroll_vertical += scroll_step
 			get_viewport().set_input_as_handled()
 
-func open_console():
+func open_console(initial_text: String = ""):
 	is_open = true
 	input_field.show()
+	input_field.text = initial_text
+	input_field.caret_column = input_field.text.length()
 	input_field.grab_focus()
 	
 	for child in message_container.get_children():

@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://clrkw476pp5vs" path="res://Plane/plane.tscn" id="3_0v15i"]
 [ext_resource type="PackedScene" uid="uid://cxod68oswlvw3" path="res://Plane/Hud/flight_hud.tscn" id="3_b00i1"]
 [ext_resource type="PackedScene" uid="uid://dpmivd6uisae0" path="res://Chat/command_consule.tscn" id="3_x7wbh"]
+[ext_resource type="Script" uid="uid://d4nlbeiwft36b" path="res://Chat/command_processor.gd" id="6_pq8jx"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_m2dqj"]
 frequency = 0.0141
@@ -24,9 +25,10 @@ material = SubResource("StandardMaterial3D_b00i1")
 radius = 100.0
 height = 200.0
 
-[node name="Planet" type="Node3D" unique_id=262084446]
+[node name="Planet" type="Node3D" unique_id=262084446 node_paths=PackedStringArray("command_processor")]
 script = ExtResource("1_06kw6")
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
+command_processor = NodePath("CommandProcessor")
 
 [node name="Camera" type="CharacterBody3D" parent="." unique_id=461413134]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
@@ -62,4 +64,8 @@ theme_override_constants/outline_size = 3
 [node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud", "sun_light", "console") instance=ExtResource("3_0v15i")]
 hud = NodePath("../FlightHud")
 sun_light = NodePath("../DirectionalLight3D")
+console = NodePath("../CommandConsule")
+
+[node name="CommandProcessor" type="Node" parent="." unique_id=994238795 node_paths=PackedStringArray("console")]
+script = ExtResource("6_pq8jx")
 console = NodePath("../CommandConsule")

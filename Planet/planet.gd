@@ -42,6 +42,7 @@ var atmosphere: MeshInstance3D
 
 @onready var sun: DirectionalLight3D = $DirectionalLight3D
 @export var real_seconds_per_game_minute: float = 1.0
+var time_speed_multiplier: float = 1.0
 var orbit_speed: float = 0.0
 @export var orbit_distance: float = 7000.0
 
@@ -49,6 +50,8 @@ var sun_orbit_angle: float = 0.0
 
 var terrain_material: ShaderMaterial
 var water_material: ShaderMaterial
+
+@export var command_processor: CommandProcessor
 
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
@@ -109,6 +112,10 @@ func _ready() -> void:
 		var q = Quad.new(self, 0, face_corner)
 		root_quads.append(q)
 		q.draw_chunk()
+	
+	command_processor.register_command("time", cmd_time, 
+	"Sets local time or adjusts time speed.",
+	"/time set <HH:MM or number> Or /time speed <multiplier>")
 
 func _process(delta: float) -> void:
 	if not camera:
@@ -123,11 +130,7 @@ func _process(delta: float) -> void:
 		q.update_lod(cam_pos, frustum_planes)
 	
 	sun_orbit_angle += orbit_speed * delta
-	var sun_x = cos(sun_orbit_angle) * orbit_distance
-	var sun_z = sin(sun_orbit_angle) * orbit_distance
-	var new_sun_pos = global_position + Vector3(sun_x, 0.0, sun_z)
-	sun.global_position = new_sun_pos
-	sun.look_at(global_position, Vector3.UP)
+	update_sun_position()
 	
 	var sun_dir = sun.global_transform.basis.z.normalized()
 	var mat = atmosphere.material_override as ShaderMaterial
@@ -138,11 +141,6 @@ func _process(delta: float) -> void:
 		get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
 	if Input.is_key_pressed(KEY_2):
 		get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
-	
-	if Input.is_key_pressed(KEY_EQUAL):
-		orbit_speed += 0.05
-	if Input.is_key_pressed(KEY_MINUS):
-		orbit_speed = max(orbit_speed - 0.05, 0.0)
 	
 	#Temp
 	if Input.is_action_just_pressed("ui_left"): # switch to free_cam
@@ -287,3 +285,68 @@ func generate_world_texture():
 	world_texture = ImageTexture.create_from_image(preview)
 	#world_image.save_png("res://test/terrain.png")
 	#world_texture = ImageTexture.create_from_image(world_image)
+
+
+func update_sun_position():
+	var sun_x = cos(sun_orbit_angle) * orbit_distance
+	var sun_z = sin(sun_orbit_angle) * orbit_distance
+	sun.global_position = global_position + Vector3(sun_x, 0, sun_z)
+	sun.look_at(global_position, Vector3.UP)
+
+func update_orbit_speed():
+	if time_speed_multiplier == 0.0:
+		orbit_speed = 0.0
+		return
+	var real_seconds_per_day = 1440.0 * (real_seconds_per_game_minute / time_speed_multiplier)
+	orbit_speed = TAU/real_seconds_per_day
+
+func set_time_hours(target_hours: float):
+	var hours = wrapf(target_hours, 0.0, 24.0)
+	
+	var planet_up = $Plane.global_position.normalized() # Have to change that later, but for now it works
+	var plane_equator = planet_up.slide(Vector3.DOWN).normalized() #Vector3.DOWN is northpole
+	var plane_longitude = atan2(plane_equator.z, plane_equator.x)
+	sun_orbit_angle = ((hours - 12.0) / 24.0) * TAU + plane_longitude
+	
+	update_sun_position()
+
+func set_time_speed(multiplier: float):
+	time_speed_multiplier = multiplier
+	update_orbit_speed()
+
+
+func cmd_time(args: Array[String]) -> String:
+	if args.size() < 2:
+		return "Invalid arguments"
+	var sub_command = args[0]
+	var value_str = args[1]
+	
+	match sub_command:
+		"set":
+			var hours: float = 0.0
+			if ":" in value_str:
+				var time_parts = value_str.split(":")
+				if time_parts.size() == 2 and time_parts[0].is_valid_int() and time_parts[1].is_valid_int():
+					var h = time_parts[0].to_int()
+					var m = time_parts[1].to_int()
+					hours = h + (m/60.0)
+				else:
+					return "Invalid time format. Use HH:MM or a number."
+			elif value_str.is_valid_float():
+				hours = value_str.to_float()
+			else:
+				return "Invalid time format. Use HH:MM or a number."
+			set_time_hours(hours)
+			var h_int = int(hours)
+			var m_int = int((hours - h_int) * 60.0)
+			command_processor.console.add_message("[color=green]Time set to %02d:%02d[/color]" % [h_int, m_int])
+			return ""
+		"speed":
+			if not value_str.is_valid_float():
+				return "Speed multiplier must be a number"
+			var speed_val = value_str.to_float()
+			set_time_speed(speed_val)
+			command_processor.console.add_message("[color=green]Time speed multiplier set to %.1fx[/color]" % speed_val)
+			return ""
+		_:
+			return "Unknown subcommand '%s'. Use 'set' or 'speed'." % sub_command
