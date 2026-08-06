@@ -13,6 +13,16 @@ fractal_gain = 0.58
 [sub_resource type="SphereShape3D" id="SphereShape3D_m2dqj"]
 radius = 1.5
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_b00i1"]
+emission_enabled = true
+emission = Color(1, 1, 0, 1)
+emission_energy_multiplier = 16.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_b00i1"]
+material = SubResource("StandardMaterial3D_b00i1")
+radius = 100.0
+height = 200.0
+
 [node name="Planet" type="Node3D" unique_id=262084446]
 script = ExtResource("1_06kw6")
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
@@ -30,6 +40,9 @@ shape = SubResource("SphereShape3D_m2dqj")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=142772881]
 
+[node name="MeshInstance3D" type="MeshInstance3D" parent="DirectionalLight3D" unique_id=1036774319]
+mesh = SubResource("SphereMesh_b00i1")
+
 [node name="Debug" type="Camera3D" parent="." unique_id=2118636890]
 
 [node name="FlightHud" parent="." unique_id=357306920 instance=ExtResource("3_b00i1")]
@@ -43,5 +56,6 @@ offset_bottom = 23.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
 
-[node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud") instance=ExtResource("3_0v15i")]
+[node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud", "sun_light") instance=ExtResource("3_0v15i")]
 hud = NodePath("../FlightHud")
+sun_light = NodePath("../DirectionalLight3D")

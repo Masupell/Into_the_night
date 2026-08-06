@@ -41,8 +41,9 @@ var world_texture: ImageTexture
 var atmosphere: MeshInstance3D
 
 @onready var sun: DirectionalLight3D = $DirectionalLight3D
-@export var orbit_speed: float = 0.05
-@export var orbit_distance: float = 2000.0
+@export var real_seconds_per_game_minute: float = 1.0
+var orbit_speed: float = 0.0
+@export var orbit_distance: float = 7000.0
 
 var sun_orbit_angle: float = 0.0
 
@@ -91,6 +92,9 @@ func _ready() -> void:
 	
 	sun.global_position = Vector3(0.0, 0.0, orbit_distance)
 	sun.look_at(global_position, Vector3.UP)
+	
+	var real_seconds_per_day = 1440.0 * real_seconds_per_game_minute
+	orbit_speed = TAU/real_seconds_per_day
 	
 	if not terrain_noise:
 		terrain_noise = FastNoiseLite.new()
