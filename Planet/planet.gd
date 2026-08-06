@@ -141,58 +141,29 @@ func _process(delta: float) -> void:
 		orbit_speed = max(orbit_speed - 0.05, 0.0)
 	
 	#Temp
-	if Input.is_action_just_pressed("ui_left"):
+	if Input.is_action_just_pressed("ui_left"): # switch to free_cam
 		var plane_camera = $Plane/Pivot/SpringArm3D/Camera3D
+		$Camera/Camera3D.rotation = Vector3.ZERO
 		$Camera.global_transform = plane_camera.global_transform
 		$Camera/Camera3D.current = true
 		camera = $Camera/Camera3D
-		$Plane.process_mode = Node.PROCESS_MODE_DISABLED
 		$Camera.process_mode = Node.PROCESS_MODE_INHERIT
-		#$Plane.active = false
 		$CanvasLayer.visible = true
 		$FlightHud.visible = false
-	if Input.is_action_just_pressed("ui_right"):
-		$Plane.global_position = $Camera.global_position
+	if Input.is_action_just_pressed("ui_right"): # switch to plane
+		var free_cam = $Camera/Camera3D
+		var pivot = $Plane/Pivot
+		var spring = $Plane/Pivot/SpringArm3D
+		pivot.global_basis = free_cam.global_basis
+		var forward = -free_cam.global_basis.z
+		$Plane.global_position = free_cam.global_position + forward * spring.spring_length
+		$Plane.global_basis = free_cam.global_basis
 		$Plane.velocity = Vector3.ZERO
-		$Plane.global_basis = $Camera.global_basis
-		#$Plane/CameraPivot.rotation = Vector3.ZERO
 		$Plane/Pivot/SpringArm3D/Camera3D.current = true
 		camera = $Plane/Pivot/SpringArm3D/Camera3D
 		$Camera.process_mode = Node.PROCESS_MODE_DISABLED
-		$Plane.process_mode = Node.PROCESS_MODE_INHERIT
-		#$Plane.active = true
 		$CanvasLayer.visible = false
 		$FlightHud.visible = true
-	#if Input.is_action_just_pressed("ui_left"):
-		#var forward = -$Player/CameraPivot/Camera3D.global_transform.basis.z
-		#var up = $Player.global_position.normalized()
-		#$Camera.global_transform = Transform3D(Basis.looking_at(forward, up), $Player/CameraPivot/Camera3D.global_position)
-		#$Camera/Camera3D.rotation = Vector3.ZERO
-		#$Camera/Camera3D.current = true
-		#camera = $Camera/Camera3D
-		#$Player.process_mode = Node.PROCESS_MODE_DISABLED
-		#$Camera.process_mode = Node.PROCESS_MODE_INHERIT
-		#$Player.active = false
-		#$CanvasLayer/Label.visible = true
-	#if Input.is_action_just_pressed("ui_right"):
-		#$Player.global_position = $Camera.global_position
-		#$Player.velocity = Vector3.ZERO
-		#var up = $Player.global_position.normalized()
-		#var camera_forward = -$Camera.global_transform.basis.z
-		#var flat_forward = camera_forward - up * camera_forward.dot(up)
-		#if flat_forward.length() > 0.001:
-			#flat_forward = flat_forward.normalized()
-			#$Player.look_direction = flat_forward
-			#$Player.basis = Basis.looking_at(flat_forward, up)
-			#var local_forward = $Player.global_transform.basis.inverse() * camera_forward
-			#$Player.camera_pitch = atan2(local_forward.y, -local_forward.z)
-		#$Player/CameraPivot.rotation.x = $Player.camera_pitch
-		#$Player/CameraPivot/Camera3D.current = true
-		#camera = $Player/CameraPivot/Camera3D
-		#$Camera.process_mode = Node.PROCESS_MODE_DISABLED
-		#$Player.process_mode = Node.PROCESS_MODE_INHERIT
-		#$Player.active = true
-		#$CanvasLayer/Label.visible = false
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)

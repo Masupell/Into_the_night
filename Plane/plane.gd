@@ -210,9 +210,14 @@ func _physics_process(delta: float) -> void:
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
 		var roll_deg = rad_to_deg(roll_rad)
 		hud.update_metrics(power, current_speed, current_amsl, current_agl, pitch_deg, roll_deg)
+	
+	if Input.is_key_pressed(KEY_ESCAPE): 
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): 
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _input(event):
-	if event is InputEventMouseMotion:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var current_up = global_position.normalized()
 		
 		var yaw_delta = -event.relative.x * camera_sensitivity
