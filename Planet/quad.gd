@@ -86,6 +86,7 @@ func test_frustum(frustum_planes: Array) -> int:
 	var fully_inside_count := 0
 	var aabb_min = bounding_aabb.position
 	var aabb_max = bounding_aabb.end
+	var margin: float = bounding_aabb.size.length() * 0.15
 	
 	for plane in frustum_planes:
 		var n_vertex = Vector3(
@@ -93,7 +94,7 @@ func test_frustum(frustum_planes: Array) -> int:
 			aabb_min.y if plane.normal.y >= 0.0 else aabb_max.y,
 			aabb_min.z if plane.normal.z >= 0.0 else aabb_max.z
 		)
-		if plane.distance_to(n_vertex) > 0.0:
+		if plane.distance_to(n_vertex) > margin:
 			return FRUSTUM_OUTSIDE
 		
 		var p_vertex = Vector3(
@@ -130,7 +131,9 @@ func is_above_horizon(camera_pos: Vector3) -> bool:
 	var sin_angle_to_chunk: float = sqrt(maxf(0.0, 1.0 - cos_angle_to_chunk * cos_angle_to_chunk))
 	var cos_nearest_edge: float = cos_angle_to_chunk * horizon_cos_alpha + sin_angle_to_chunk * horizon_sin_alpha
 	
-	return cos_nearest_edge > cos_total_horizon
+	var margin: float = 0.02 / float(level + 1)
+	
+	return cos_nearest_edge > cos_total_horizon - margin
 
 
 func get_neighbor_north() -> Quad:
