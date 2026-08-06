@@ -55,7 +55,9 @@ var right_aileron_rest: Vector3
 var elevator_rest: Vector3
 var rudder_rest: Vector3
 
-@onready var text = $"../CanvasLayer/Label"
+#@onready var text = $"../CanvasLayer/Label"
+@export var hud: FligthHUD
+@export var planet_radius: float = 5000.0
 
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -81,10 +83,10 @@ func _physics_process(delta: float) -> void:
 	var thrust_input := 0.0
 	if Input.is_key_pressed(KEY_SHIFT):
 		thrust_input += 1.0
-		text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
+		#text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
 	if Input.is_key_pressed(KEY_CTRL):
 		thrust_input -= 2.0
-		text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
+		#text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
 	move_speed = clamp(move_speed + thrust_input * acceleration * delta, 0.0, max_speed)
 	
 	var forward = global_transform.basis.z
@@ -187,7 +189,17 @@ func _physics_process(delta: float) -> void:
 	
 	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
 	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
-
+	
+	# Hud
+	if hud:
+		var power = move_speed/max_speed
+		var current_speed = velocity.length()
+		var current_altitude = global_position.length() - planet_radius
+		var pitch_rad = asin(clamp(forward.dot(planet_up), -1.0, 1.0))
+		var pitch_deg = rad_to_deg(pitch_rad)
+		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
+		var roll_deg = rad_to_deg(roll_rad)
+		hud.update_metrics(power, current_speed, current_altitude, pitch_deg, roll_deg)
 
 func _input(event):
 	if event is InputEventMouseMotion:

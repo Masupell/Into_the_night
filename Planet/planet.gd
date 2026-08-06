@@ -149,24 +149,20 @@ func _process(delta: float) -> void:
 		$Plane.process_mode = Node.PROCESS_MODE_DISABLED
 		$Camera.process_mode = Node.PROCESS_MODE_INHERIT
 		#$Plane.active = false
-		#$CanvasLayer/Label.visible = true
+		$CanvasLayer.visible = true
+		$FlightHud.visible = false
 	if Input.is_action_just_pressed("ui_right"):
 		$Plane.global_position = $Camera.global_position
 		$Plane.velocity = Vector3.ZERO
-		#
-		# Copy camera orientation directly to plane
-		#
 		$Plane.global_basis = $Camera.global_basis
-		#
-		# Make player camera match plane
-		#
 		#$Plane/CameraPivot.rotation = Vector3.ZERO
 		$Plane/Pivot/SpringArm3D/Camera3D.current = true
 		camera = $Plane/Pivot/SpringArm3D/Camera3D
 		$Camera.process_mode = Node.PROCESS_MODE_DISABLED
 		$Plane.process_mode = Node.PROCESS_MODE_INHERIT
 		#$Plane.active = true
-		#$CanvasLayer/Label.visible = false
+		$CanvasLayer.visible = false
+		$FlightHud.visible = true
 	#if Input.is_action_just_pressed("ui_left"):
 		#var forward = -$Player/CameraPivot/Camera3D.global_transform.basis.z
 		#var up = $Player.global_position.normalized()

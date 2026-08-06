@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://cxod68oswlvw3"]
+
+[ext_resource type="Script" uid="uid://2rk26p7wrp7f" path="res://Plane/Hud/flight_hud.gd" id="1_uqj33"]
+
+[node name="FlightHud" type="CanvasLayer" unique_id=357306920]
+script = ExtResource("1_uqj33")
+
+[node name="Control" type="Control" parent="." unique_id=1275231529]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Control" unique_id=1080459538]
+layout_mode = 1
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/MarginContainer" unique_id=229763637]
+layout_mode = 2
+
+[node name="MotorPowerLabel" type="Label" parent="Control/MarginContainer/VBoxContainer" unique_id=2033745209]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+
+[node name="SpeedLabel" type="Label" parent="Control/MarginContainer/VBoxContainer" unique_id=2136419351]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+
+[node name="AltitudeLabel" type="Label" parent="Control/MarginContainer/VBoxContainer" unique_id=1867143559]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+
+[node name="PitchRollLabel" type="Label" parent="Control/MarginContainer/VBoxContainer" unique_id=1961817087]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3

@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://cxwepqf8u4p3s" path="res://Planet/planet.gd" id="1_06kw6"]
 [ext_resource type="Script" uid="uid://bimb2hbeu4ma2" path="res://Planet/camera.gd" id="2_m2dqj"]
 [ext_resource type="PackedScene" uid="uid://clrkw476pp5vs" path="res://Plane/plane.tscn" id="3_0v15i"]
+[ext_resource type="PackedScene" uid="uid://cxod68oswlvw3" path="res://Plane/Hud/flight_hud.tscn" id="3_b00i1"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_m2dqj"]
 frequency = 0.0141
@@ -31,6 +32,9 @@ shape = SubResource("SphereShape3D_m2dqj")
 
 [node name="Debug" type="Camera3D" parent="." unique_id=2118636890]
 
+[node name="FlightHud" parent="." unique_id=357306920 instance=ExtResource("3_b00i1")]
+visible = false
+
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=159878285]
 
 [node name="Label" type="Label" parent="CanvasLayer" unique_id=1031283555]
@@ -39,4 +43,5 @@ offset_bottom = 23.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
 
-[node name="Plane" parent="." unique_id=155938384 instance=ExtResource("3_0v15i")]
+[node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud") instance=ExtResource("3_0v15i")]
+hud = NodePath("../FlightHud")
