@@ -54,6 +54,8 @@ var water_material: ShaderMaterial
 
 @export var command_processor: CommandProcessor
 
+var world_commands: WorldCommands
+
 func _ready() -> void:
 	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
 	
@@ -114,21 +116,7 @@ func _ready() -> void:
 		root_quads.append(q)
 		q.draw_chunk()
 	
-	command_processor.register_command("time", cmd_time, 
-	"Sets local time or adjusts time speed.",
-	"/time set <HH:MM or number or \n['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']> \nOr /time speed <multiplier>")
-	
-	command_processor.register_command("wireframe", cmd_wireframe,
-	"Enables or disables wireframe view",
-	"/wireframe <1 or 2> (1 for default no wireframe, 2 for wireframe)")
-	
-	command_processor.register_command("camera", cmd_camera,
-	"Switches between plane, freecam and debug cam",
-	"/camera <plane or freecam/free or debug or <1 or 2 or 3>")
-	
-	command_processor.register_command("atmosphere", cmd_atmosphere,
-	"Currently just show or hide", 
-	"/atmosphere <show or hide>")
+	world_commands = WorldCommands.new(command_processor, self)
 
 
 func _process(delta: float) -> void:
@@ -299,118 +287,6 @@ func set_time_speed(multiplier: float):
 	update_orbit_speed()
 
 
-func cmd_time(args: Array[String]) -> String:
-	if args.size() < 2:
-		return "Invalid arguments"
-	var sub_command = args[0]
-	var value_str = args[1]
-	
-	match sub_command:
-		"set":
-			var hours: float = 0.0
-			if ":" in value_str:
-				var time_parts = value_str.split(":")
-				if time_parts.size() == 2 and time_parts[0].is_valid_int() and time_parts[1].is_valid_int():
-					var h = time_parts[0].to_int()
-					var m = time_parts[1].to_int()
-					hours = h + (m/60.0)
-				else:
-					return "Invalid time format. Use HH:MM or a number."
-			elif value_str.is_valid_float():
-				hours = value_str.to_float()
-			else:
-				match value_str.to_lower():
-					"dawn":
-						hours = 5.0
-					"morning":
-						hours = 7.0
-					"noon":
-						hours = 12.0
-					"afternoon":
-						hours = 13.0
-					"dusk":
-						hours = 17.75
-					"night":
-						hours = 24.0
-					_:
-						return "Invalid Time. Use ['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']"
-			set_time_hours(hours)
-			var h_int = int(hours)
-			var m_int = int((hours - h_int) * 60.0)
-			command_processor.console.add_message("[color=green]Time set to %02d:%02d[/color]" % [h_int, m_int])
-			return ""
-		"speed":
-			if not value_str.is_valid_float():
-				return "Speed multiplier must be a number"
-			var speed_val = value_str.to_float()
-			set_time_speed(speed_val)
-			command_processor.console.add_message("[color=green]Time speed multiplier set to %.1fx[/color]" % speed_val)
-			return ""
-		_:
-			return "Unknown subcommand '%s'. Use 'set' or 'speed'." % sub_command
-
-func cmd_wireframe(args: Array[String]) -> String:
-	if args.is_empty():
-		return "Missing Arguments"
-	if args[0].is_valid_int():
-		var value = args[0].to_int()
-		if value == 1:
-			if not get_viewport().debug_draw == Viewport.DEBUG_DRAW_DISABLED:
-				get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
-				command_processor.console.add_message("[color=green]Wireframe mode disabled[/color]")
-			return ""
-		elif value == 2:
-			if not get_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME:
-				get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
-				command_processor.console.add_message("[color=green]Wireframe mode enabled[/color]")
-			return ""
-		else:
-			return "Only '1' or '2'"
-	return "Invalid Number"
-
-func cmd_camera(args: Array[String]) -> String:
-	if args.is_empty():
-		return "Missing Arguments"
-	var value_str = args[0]
-	if value_str.is_valid_int():
-		match value_str.to_int():
-			1:
-				if camera_mode != 1:
-					switch_to_plane()
-					command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
-				return ""
-			2:
-				if camera_mode != 2:
-					switch_to_free()
-					command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
-				return ""
-			3:
-				if camera_mode != 3:
-					switch_to_free(true)
-					command_processor.console.add_message("[color=green]Switched to debug[/color]")
-				return ""
-			_:
-				return "Invalid Argument"
-	else:
-		match value_str.to_lower():
-			"plane":
-				if camera_mode != 1:
-					switch_to_plane()
-					command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
-				return ""
-			"free", "freecam":
-				if camera_mode != 2:
-					switch_to_free()
-					command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
-				return ""
-			"debug":
-				if camera_mode != 3:
-					switch_to_free(true)
-					command_processor.console.add_message("[color=green]Switched to debug[/color]")
-				return ""
-			_:
-				return "Invalid Argument"
-
 func switch_to_free(debug: bool = false):
 	var plane_camera = $Plane/Pivot/SpringArm3D/Camera3D
 	$Camera/Camera3D.rotation = Vector3.ZERO
@@ -437,18 +313,3 @@ func switch_to_plane(): # kind of switches to plane from old free position, beca
 	$CanvasLayer.visible = false
 	$FlightHud.visible = true
 	camera_mode = 1
-
-func cmd_atmosphere(args: Array[String]) -> String:
-	if args.is_empty():
-		return "Missing Arguments"
-	match args[0].to_lower():
-		"show":
-			atmosphere.show()
-			command_processor.console.add_message("[color=green]Atmosphere Shown[/color]")
-			return ""
-		"hide":
-			atmosphere.hide()
-			command_processor.console.add_message("[color=green]Atmosphere Hidden[/color]")
-			return ""
-		_:
-			return "Invalid Argument"
