@@ -231,8 +231,8 @@ func remove_chunk():
 		chunk.recycle()
 		chunk = null
 
-func get_grid_size(_lvl: int) -> int:
-	var edge_length = corners[0].distance_to(corners[1])
+func get_grid_size(lvl: int) -> int:
+	var edge_length = planet.edge_length / float(1 << lvl) # 2^lvl by bitshifting
 	if edge_length > 2500.0: # 2.5km across, in this case for level 0 & 1
 		return planet.grid_size * 4
 	elif edge_length > 1000.0: # 1km across, level 2
@@ -274,6 +274,7 @@ func draw_chunk():
 	
 	chunk.planet = planet
 	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.terrain_data, corners, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
+	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
 func has_active_ancestor_chunk() -> bool:

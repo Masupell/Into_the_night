@@ -124,11 +124,13 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
 	var colors = PackedColorArray()
+	var uvs = PackedVector2Array()
 	
 	vertices.resize(total_vertices_all)
 	indices.resize(total_index_count)
 	normals.resize(total_vertices_all)
 	colors.resize(total_vertices_all)
+	uvs.resize(total_vertices_all)
 	
 	var sphere_points_cache = PackedVector3Array()
 	sphere_points_cache.resize(total_vertices)
@@ -140,6 +142,8 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 			var idx = x + (y * num_vertices)
 			var u = float(x) / grid_size
 			var v = float(y) / grid_size
+			
+			uvs[idx] = Vector2(u, v)
 			
 			var top_lerp = corners[0].lerp(corners[1], u) # top-left to top-right
 			var bottom_lerp = corners[3].lerp(corners[2], u) # bottom-left to bottom-right
@@ -241,6 +245,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		colors[s_idx] = colors[src_idx]
+		uvs[s_idx] = uvs[src_idx]
 	
 	for x in range(num_vertices):
 		var src_idx = x + grid_size * num_vertices # south edge
@@ -248,6 +253,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		colors[s_idx] = colors[src_idx]
+		uvs[s_idx] = uvs[src_idx]
 	
 	for y in range(num_vertices):
 		var src_idx = y * num_vertices # west edge
@@ -255,6 +261,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		colors[s_idx] = colors[src_idx]
+		uvs[s_idx] = uvs[src_idx]
 	
 	for y in range(num_vertices):
 		var src_idx = grid_size + y * num_vertices # east edge
@@ -262,6 +269,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		colors[s_idx] = colors[src_idx]
+		uvs[s_idx] = uvs[src_idx]
 	
 	var idx_ptr = main_index_count
 	
@@ -318,12 +326,11 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 		idx_ptr += 6
 	
 	
-	
-	
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_COLOR] = colors
+	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
 	
 	var water_data = calculate_water_mesh(grid_size, radius, height, min_chunk_height, 0.08, sphere_points_cache)
 	

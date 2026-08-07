@@ -4,6 +4,9 @@ extends RefCounted
 var planet: Planet
 var command_processor: CommandProcessor
 
+var show_borders: bool = false
+var show_lod: bool = false
+
 func _init(processor: CommandProcessor, _planet: Planet) -> void:
 	command_processor = processor
 	planet = _planet
@@ -25,10 +28,14 @@ func register_all():
 	command_processor.register_command("atmosphere", cmd_atmosphere,
 	"Currently just show or hide", 
 	"/atmosphere <show or hide>")
+	
+	command_processor.register_command("chunk", cmd_chunk,
+	"Different things with the chunks, only for debug right now",
+	"/chunk border <show or hide> or /chunk lod <show or hide>")
 
 func cmd_time(args: Array[String]) -> String:
 	if args.size() < 2:
-		return "Invalid arguments"
+		return "Missing Arguments"
 	var sub_command = args[0]
 	var value_str = args[1]
 	
@@ -152,3 +159,43 @@ func cmd_atmosphere(args: Array[String]) -> String:
 			return ""
 		_:
 			return "Invalid Argument"
+
+func cmd_chunk(args: Array[String]) -> String:
+	if args.size() < 2:
+		return "Missing Arguments"
+	var sub_command = args[0]
+	var value_str = args[1]
+	
+	match sub_command.to_lower():
+		"border":
+			match value_str.to_lower():
+				"show":
+					if !show_borders:
+						show_borders = true
+						RenderingServer.global_shader_parameter_set("show_borders", true)
+						command_processor.console.add_message("[color=green]Borders Shown[/color]")
+				"hide":
+					if show_borders:
+						show_borders = false
+						RenderingServer.global_shader_parameter_set("show_borders", false)
+						command_processor.console.add_message("[color=green]Borders Hidden[/color]")
+				_:
+					return "Invalid Argument: '%s'" % value_str
+			return ""
+		"lod":
+			match value_str.to_lower():
+				"show":
+					if !show_lod:
+						show_lod = true
+						RenderingServer.global_shader_parameter_set("show_lod", true)
+						command_processor.console.add_message("[color=green]Showing Lod[/color]")
+				"hide":
+					if show_lod:
+						show_lod = false
+						RenderingServer.global_shader_parameter_set("show_lod", false)
+						command_processor.console.add_message("[color=green]Lod colors Hidden[/color]")
+				_:
+					return "Invalid Argument: '%s'" % value_str
+			return ""
+		_:
+			return "Invalid Argument: '%s'" % sub_command

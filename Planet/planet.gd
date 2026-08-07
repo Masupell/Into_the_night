@@ -56,10 +56,14 @@ var water_material: ShaderMaterial
 
 var world_commands: WorldCommands
 
+var edge_length: float = (radius * 2.0) / sqrt(3.0)
+
 func _ready() -> void:
-	#get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
 	
-	#$Player.global_position = $Camera.global_position
+	#for level in range(17):
+		#var chunk_world_size = (radius * 2.0 / sqrt(3.0)) / pow(2, level)
+		#print(level, ": ", chunk_world_size)
+	
 	$Plane.global_position = $Camera.global_position
 	
 	planet_seed = randi()
@@ -117,7 +121,6 @@ func _ready() -> void:
 		q.draw_chunk()
 	
 	world_commands = WorldCommands.new(command_processor, self)
-
 
 func _process(delta: float) -> void:
 	if not camera:
