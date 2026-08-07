@@ -89,99 +89,27 @@ func _physics_process(delta: float) -> void:
 	up_direction = planet_up
 	var forward = global_transform.basis.z
 	
-	# Raycast for above ground height measure
-	var space_state = get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(global_position, Vector3.ZERO)
-	query.exclude = [self.get_rid()]
-	var result = space_state.intersect_ray(query)
-	var current_agl: float = -1.0
-	if result:
-		var hit_position: Vector3 = result.position
-		current_agl =global_position.distance_to(hit_position)
-	
-	
-	var world_north_pole = Vector3.DOWN # 'DOWN' Works better here, dont have to reverse sun rotation or planet generation
-	
-	#Compass
-	var surface_north = world_north_pole.slide(planet_up).normalized()
-	if surface_north.length_squared() < 0.001:
-		surface_north = Vector3.FORWARD.slide(planet_up).normalized()
-	var surface_east = planet_up.cross(surface_north).normalized()
-	var heading_forward = forward.slide(planet_up).normalized()
-	
-	var heading_rad = atan2(heading_forward.dot(surface_east), heading_forward.dot(surface_north))
-	var heading_deg = wrapf(360.0 - rad_to_deg(heading_rad), 0.0, 360.0) #subtract value from 360, so it lines up with real life, clockwise rotation increases degree
-	
-	#Time
-	var current_time_hours: float = 0.0
-	if sun_light:
-		# DirectionalLight3D shines along -Z axis, so from planet to light it is +Z
-		var sun_dir = sun_light.global_transform.basis.z.normalized()
-		var plane_equator = planet_up.slide(world_north_pole).normalized()
-		var sun_equator = sun_dir.slide(world_north_pole).normalized()
-		var plane_sun_cross = plane_equator.cross(sun_equator)
-		var plane_sun_dot = plane_equator.dot(sun_equator)
-		var angle_rad = atan2(plane_sun_cross.dot(world_north_pole), plane_sun_dot)
-		# Map angle to 24h time
-		current_time_hours = wrapf(12.0 + (angle_rad / TAU * 24.0), 0.0, 24.0)
-	
-	# Hud
-	if hud:
-		var power = move_speed/max_speed
-		var current_speed = velocity.length()
-		var current_amsl = global_position.length() - planet_radius
-		var pitch_rad = asin(clamp(forward.dot(planet_up), -1.0, 1.0))
-		var pitch_deg = rad_to_deg(pitch_rad)
-		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
-		var roll_deg = rad_to_deg(roll_rad)
-		hud.update_metrics(power, current_speed, heading_deg, current_amsl, current_agl, pitch_deg, roll_deg, current_time_hours)
-	
-	
-	#Camera movement around Plane
-	pivot.global_position = global_position
-
-	var current_fwd = -pivot.global_transform.basis.z
-	var current_pitch = asin(clamp(current_fwd.dot(planet_up), -1.0, 1.0))
-	var right = current_fwd.cross(planet_up).normalized()
-	if right.length_squared() < 0.001:
-		right = pivot.global_transform.basis.x.slide(planet_up).normalized()
-	var level_fwd = planet_up.cross(right).normalized()
-	var clean_horizon = Basis(right, planet_up, -level_fwd)
-	var pitch_rot = Quaternion(right, current_pitch)
-	
-	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
-	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
-	
-	
 	var thrust_input := 0.0
 	var pitch_input := 0.0
 	var roll_input := 0.0
 	var yaw_input := 0.0
-	if is_typing:
-		thrust_input = 0.0
-		pitch_input = 0.0
-		roll_input = 0.0
-		yaw_input = 0.0
-		velocity = (forward * move_speed) + (-planet_up * fall_speed)
-		move_and_slide()
-		return
+	if !is_typing:
+		if Input.is_key_pressed(KEY_SHIFT):
+			thrust_input += 1.0
+		if Input.is_key_pressed(KEY_CTRL):
+			thrust_input -= 2.0
+		
+		if Input.is_key_pressed(KEY_S): pitch_input -= 1.0 # Pull up
+		if Input.is_key_pressed(KEY_W): pitch_input += 1.0 # Pull down
+		
+		if Input.is_key_pressed(KEY_A): roll_input += 1.0 # Bank left
+		if Input.is_key_pressed(KEY_D): roll_input -= 1.0 # Bank right
+		
+		if Input.is_key_pressed(KEY_E): yaw_input += 1.0 # Right
+		if Input.is_key_pressed(KEY_Q): yaw_input -= 1.0 # Left
 	
-	if Input.is_key_pressed(KEY_SHIFT):
-		thrust_input += 1.0
-	if Input.is_key_pressed(KEY_CTRL):
-		thrust_input -= 2.0
 	move_speed = clamp(move_speed + thrust_input * acceleration * delta, 0.0, max_speed)
-	
 	velocity = (forward * move_speed) + (-planet_up * fall_speed)
-	
-	if Input.is_key_pressed(KEY_S): pitch_input -= 1.0 # Pull up
-	if Input.is_key_pressed(KEY_W): pitch_input += 1.0 # Pull down
-	
-	if Input.is_key_pressed(KEY_A): roll_input += 1.0 # Bank left
-	if Input.is_key_pressed(KEY_D): roll_input -= 1.0 # Bank right
-	
-	if Input.is_key_pressed(KEY_E): yaw_input += 1.0 # Right
-	if Input.is_key_pressed(KEY_Q): yaw_input -= 1.0 # Left
 	
 	if is_on_floor():
 		fall_speed = 0.0
@@ -252,6 +180,71 @@ func _physics_process(delta: float) -> void:
 		rudder_rest.y + deg_to_rad(8.0 * animation_yaw),
 		delta * 10.0
 	)
+	
+	# -- HUD -- #
+	
+	# Raycast for above ground height measure
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(global_position, Vector3.ZERO)
+	query.exclude = [self.get_rid()]
+	var result = space_state.intersect_ray(query)
+	var current_agl: float = -1.0
+	if result:
+		var hit_position: Vector3 = result.position
+		current_agl =global_position.distance_to(hit_position)
+	
+	
+	var world_north_pole = Vector3.DOWN # 'DOWN' Works better here, dont have to reverse sun rotation or planet generation
+	
+	#Compass
+	var surface_north = world_north_pole.slide(planet_up).normalized()
+	if surface_north.length_squared() < 0.001:
+		surface_north = Vector3.FORWARD.slide(planet_up).normalized()
+	var surface_east = planet_up.cross(surface_north).normalized()
+	var heading_forward = forward.slide(planet_up).normalized()
+	
+	var heading_rad = atan2(heading_forward.dot(surface_east), heading_forward.dot(surface_north))
+	var heading_deg = wrapf(360.0 - rad_to_deg(heading_rad), 0.0, 360.0) #subtract value from 360, so it lines up with real life, clockwise rotation increases degree
+	
+	#Time
+	var current_time_hours: float = 0.0
+	if sun_light:
+		# DirectionalLight3D shines along -Z axis, so from planet to light it is +Z
+		var sun_dir = sun_light.global_transform.basis.z.normalized()
+		var plane_equator = planet_up.slide(world_north_pole).normalized()
+		var sun_equator = sun_dir.slide(world_north_pole).normalized()
+		var plane_sun_cross = plane_equator.cross(sun_equator)
+		var plane_sun_dot = plane_equator.dot(sun_equator)
+		var angle_rad = atan2(plane_sun_cross.dot(world_north_pole), plane_sun_dot)
+		# Map angle to 24h time
+		current_time_hours = wrapf(12.0 + (angle_rad / TAU * 24.0), 0.0, 24.0)
+	
+	# Hud
+	if hud:
+		var power = move_speed/max_speed
+		var current_speed = velocity.length()
+		var current_amsl = global_position.length() - planet_radius
+		var pitch_rad = asin(clamp(forward.dot(planet_up), -1.0, 1.0))
+		var pitch_deg = rad_to_deg(pitch_rad)
+		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
+		var roll_deg = rad_to_deg(roll_rad)
+		hud.update_metrics(power, current_speed, heading_deg, current_amsl, current_agl, pitch_deg, roll_deg, current_time_hours)
+	
+	
+	#Camera movement around Plane
+	pivot.global_position = global_position
+
+	var current_fwd = -pivot.global_transform.basis.z
+	var current_pitch = asin(clamp(current_fwd.dot(planet_up), -1.0, 1.0))
+	var right = current_fwd.cross(planet_up).normalized()
+	if right.length_squared() < 0.001:
+		right = pivot.global_transform.basis.x.slide(planet_up).normalized()
+	var level_fwd = planet_up.cross(right).normalized()
+	var clean_horizon = Basis(right, planet_up, -level_fwd)
+	var pitch_rot = Quaternion(right, current_pitch)
+	
+	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
+	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
