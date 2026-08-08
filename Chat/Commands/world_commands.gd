@@ -15,23 +15,34 @@ func _init(processor: CommandProcessor, _planet: Planet) -> void:
 func register_all():
 	command_processor.register_command("time", cmd_time, 
 	"Sets local time or adjusts time speed.",
-	"/time set <HH:MM or number or \n['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']> \nOr /time speed <multiplier>")
+	"/time set <HH:MM or number or \n['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']> \nOr /time speed <multiplier>",
+	{
+		"set": ["Dawn", "Morning", "Noon", "AfterNoon", "Dusk", "Night"],
+		"speed": []
+	})
 	
 	command_processor.register_command("wireframe", cmd_wireframe,
 	"Enables or disables wireframe view",
-	"/wireframe <1 or 2> (1 for default no wireframe, 2 for wireframe)")
+	"/wireframe <1 or 2> (1 for default no wireframe, 2 for wireframe)",
+	["1", "2"])
 	
 	command_processor.register_command("camera", cmd_camera,
 	"Switches between plane, freecam and debug cam",
-	"/camera <plane or freecam/free or debug or <1 or 2 or 3>")
+	"/camera <plane or freecam/free or debug or <1 or 2 or 3>",
+	["plane", "free", "freecam", "debug", "1", "2", "3"])
 	
 	command_processor.register_command("atmosphere", cmd_atmosphere,
 	"Currently just show or hide", 
-	"/atmosphere <show or hide>")
+	"/atmosphere <show or hide>",
+	["show", "hide"])
 	
 	command_processor.register_command("chunk", cmd_chunk,
 	"Different things with the chunks, only for debug right now",
-	"/chunk border <show or hide> or /chunk lod <show or hide>")
+	"/chunk border <show or hide> or /chunk lod <show or hide>",
+	{
+		"border": ["show", "hide"],
+		"lod": ["show", "hide"]
+	})
 
 func cmd_time(args: Array[String]) -> String:
 	if args.size() < 2:
