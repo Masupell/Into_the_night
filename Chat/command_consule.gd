@@ -15,12 +15,59 @@ const MAX_MESSAGES: int = 50
 
 var is_open: bool = false
 
+var processor: CommandProcessor
+
+var suggestion_panel: PanelContainer
+var suggestion_label: RichTextLabel
+var current_suggestions: Array[String] = []
+var suggestion_index: int = -1
+var base_prefix: String = ""
+var is_completing: bool = false
+
+var command_history: Array[String] = []
+var history_index: int = -1
+var draft_text: String = ""
+
 func _ready() -> void:
 	input_field.hide()
 	input_field.text_submitted.connect(text_submitted)
+	input_field.text_changed.connect(text_changed)
 	
 	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	
+	setup_suggestion_overlay()
+
+func setup_suggestion_overlay():
+	var wrapper := Control.new()
+	wrapper.custom_minimum_size.y = 0
+	input_field.get_parent().add_child(wrapper)
+	input_field.get_parent().move_child(wrapper, input_field.get_index())
+	
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.08, 0.08, 0.85)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	
+	suggestion_panel = PanelContainer.new()
+	suggestion_panel.add_theme_stylebox_override("panel", style)
+	suggestion_panel.anchor_left = 0.0
+	suggestion_panel.anchor_right = 1.0
+	suggestion_panel.anchor_top = 1.0
+	suggestion_panel.anchor_bottom = 1.0
+	suggestion_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	suggestion_panel.hide()
+	wrapper.add_child(suggestion_panel)
+	
+	suggestion_label = RichTextLabel.new()
+	suggestion_label.bbcode_enabled = true
+	suggestion_label.fit_content = true
+	suggestion_label.scroll_active = false
+	suggestion_panel.add_child(suggestion_label)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.is_echo():
@@ -35,6 +82,15 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_ESCAPE and is_open:
 			close_console()
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_TAB and is_open:
+			handle_tab_completion()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_UP and is_open:
+			navigate_history(1)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_DOWN and is_open:
+			navigate_history(-1)
+			get_viewport().set_input_as_handled()
 	
 	if is_open and event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -47,6 +103,8 @@ func _input(event: InputEvent) -> void:
 
 func open_console(initial_text: String = ""):
 	is_open = true
+	history_index = -1
+	draft_text = ""
 	input_field.show()
 	input_field.text = initial_text
 	input_field.caret_column = input_field.text.length()
@@ -64,12 +122,16 @@ func open_console(initial_text: String = ""):
 	console_toggled.emit(true)
 	
 	scroll_to_bottom()
+	text_changed(initial_text)
 
 func close_console():
 	is_open = false
 	input_field.clear()
 	input_field.hide()
 	input_field.release_focus()
+	
+	history_index = -1
+	draft_text = ""
 	
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	console_toggled.emit(false)
@@ -78,6 +140,71 @@ func close_console():
 	for child in message_container.get_children():
 		if child is Control:
 			schedule_message_fade(child, current_time_sec)
+
+func navigate_history(direction: int):
+	if command_history.is_empty():
+		return
+	if history_index == -1 and direction == 1:
+		draft_text = input_field.text
+	
+	var new_index = history_index + direction
+	new_index = clamp(new_index, -1, command_history.size() - 1)
+	
+	if new_index == history_index:
+		return
+	history_index = new_index
+	
+	if history_index == -1:
+		input_field.text = draft_text
+	else:
+		input_field.text = command_history[command_history.size() - 1 - history_index]
+	input_field.caret_column = input_field.text.length()
+
+func text_changed(new_text: String):
+	if is_completing:
+		return
+	if !processor or !is_open:
+		clear_suggestions()
+		return
+	base_prefix = new_text
+	current_suggestions = processor.get_suggestions(new_text)
+	suggestion_index = -1
+	update_suggestion_ui()
+
+func handle_tab_completion():
+	if current_suggestions.is_empty():
+		return
+	is_completing = true
+	suggestion_index = (suggestion_index + 1) % current_suggestions.size()
+	var selected_cmd = current_suggestions[suggestion_index]
+	input_field.text = selected_cmd
+	input_field.caret_column = selected_cmd.length()
+	
+	update_suggestion_ui()
+	
+	is_completing = false
+
+func update_suggestion_ui():
+	if current_suggestions.is_empty():
+		clear_suggestions()
+		return
+	var suggestion_text: Array[String] = []
+	for i in range(current_suggestions.size()):
+		var cmd = current_suggestions[i]
+		if i == suggestion_index:
+			suggestion_text.append("[color=yellow][u]%s[/u][/color]\n" % cmd)
+		else:
+			suggestion_text.append("[color=gray]%s[/color]\n" % cmd)
+	
+	suggestion_label.text = "".join(suggestion_text)
+	suggestion_panel.show()
+
+func clear_suggestions():
+	current_suggestions.clear()
+	suggestion_index = -1
+	if suggestion_label:
+		suggestion_label.text = ""
+		suggestion_panel.hide()
 
 func add_message(text: String):
 	while message_container.get_child_count() >= MAX_MESSAGES:
@@ -129,6 +256,8 @@ func schedule_message_fade(label: Control, current_time_sec: float):
 func text_submitted(new_text: String):
 	var trimmed = new_text.strip_edges()
 	if trimmed != "":
+		if command_history.is_empty() or command_history.back() != trimmed:
+			command_history.append(trimmed)
 		add_message(trimmed)
 		command_submitted.emit(trimmed)
 	close_console()

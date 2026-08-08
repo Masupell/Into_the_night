@@ -17,6 +17,7 @@ class Command:
 
 var registered_commands: Dictionary = {}
 func _ready() -> void:
+	console.processor = self
 	console.command_submitted.connect(process_command)
 	register_command("help", cmd_help, "Displays all available commands or info about a specific command.", "/help [command_name]")
 
@@ -25,6 +26,21 @@ func register_command(cmd_name: String, callback: Callable, description: String 
 
 func unregister_command(cmd_name: String):
 	registered_commands.erase(cmd_name)
+
+func get_suggestions(input_text: String) -> Array[String]:
+	var matches: Array[String] = []
+	if not input_text.begins_with("/"):
+		return matches
+	
+	var parts = input_text.substr(1).split(" ", false)
+	
+	if parts.size() <= 1 and not input_text.ends_with(" "):
+		var prefix = parts[0] if parts.size() == 1 else ""
+		for cmd_name in registered_commands:
+			if cmd_name.begins_with(prefix):
+				matches.append("/" + cmd_name)
+	matches.sort()
+	return matches
 
 func process_command(text: String):
 	if not text.begins_with("/"):
