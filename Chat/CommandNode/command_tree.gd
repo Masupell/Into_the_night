@@ -68,7 +68,7 @@ func get_suggestions(input_text: String) -> Array[String]:
 		current = matched
 	
 	var base_string := "/"
-	for token in completed_tokens:
+	if not completed_tokens.is_empty():
 		base_string += " ".join(completed_tokens) + " "
 	
 	var matches: Array[String] = []

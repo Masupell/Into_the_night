@@ -7,6 +7,11 @@ var command_processor: CommandProcessor
 var show_borders: bool = false
 var show_lod: bool = false
 
+const VISIBILITY_MAP := {
+	"show": 1,
+	"hide": 2
+}
+
 func _init(processor: CommandProcessor, _planet: Planet) -> void:
 	command_processor = processor
 	planet = _planet
@@ -37,35 +42,22 @@ func register_all():
 			}
 	})
 	
-	#"/chunk border <show or hide> or /chunk lod <show or hide>",
-	var chunk_command = "chunk { border <visible:any|show,hide> | lod <visible:any:show,hide> }" # 1 for visible, 0 for hidden
+	var chunk_command = "chunk { border <visible:any|show,hide> | lod <visible:any|show,hide> }" # 1 for visible, 0 for hidden
 	command_processor.register_command_multiple(chunk_command, self, "Different things with the chunks, only for debug right now",
 	{
-		"visible":
-			{
-				"show": 1,
-				"hide": 2
-			}
+		"visible": VISIBILITY_MAP
 	})
 	
 	var atmosphere_command = "atmosphere <visible:any|show,hide>"
 	command_processor.register_command(atmosphere_command, cmd_atmosphere, "Currently just show or hide",
 	{
-		"visible":
-			{
-				"show": 1,
-				"hide": 2
-			}
+		"visible": VISIBILITY_MAP
 	})
 	
 	var wireframe_toggle_command = "wireframe <visible:any|show,hide>"
 	command_processor.register_command(wireframe_toggle_command, cmd_wireframe, "Currently just show or hide",
 	{
-		"visible":
-			{
-				"show": 1,
-				"hide": 2
-			}
+		"visible": VISIBILITY_MAP
 	})
 
 
