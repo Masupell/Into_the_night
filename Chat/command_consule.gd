@@ -28,6 +28,8 @@ var command_history: Array[String] = []
 var history_index: int = -1
 var draft_text: String = ""
 
+var suggestion_applied := false
+
 func _ready() -> void:
 	input_field.hide()
 	input_field.text_submitted.connect(text_submitted)
@@ -70,27 +72,35 @@ func setup_suggestion_overlay():
 	suggestion_panel.add_child(suggestion_label)
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.is_echo():
-		if event.keycode == KEY_ENTER:
-			if not is_open:
-				open_console()
-				get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_SLASH:
-			if not is_open:
-				open_console("/")
-				get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_ESCAPE and is_open:
-			close_console()
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_TAB and is_open:
-			handle_tab_completion()
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_UP and is_open:
-			navigate_history(1)
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_UP and is_open:
+			if !current_suggestions.is_empty():
+				navigate_suggestions(-1)
+			else:
+				navigate_history(1)
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_DOWN and is_open:
-			navigate_history(-1)
+			if !current_suggestions.is_empty():
+				navigate_suggestions(1)
+			else:
+				navigate_history(-1)
 			get_viewport().set_input_as_handled()
+		elif not event.is_echo():
+			if event.keycode == KEY_ENTER:
+				if not is_open:
+					open_console()
+					get_viewport().set_input_as_handled()
+			elif event.keycode == KEY_SLASH:
+				if not is_open:
+					open_console("/")
+					get_viewport().set_input_as_handled()
+			elif event.keycode == KEY_ESCAPE and is_open:
+				close_console()
+				get_viewport().set_input_as_handled()
+			elif event.keycode == KEY_TAB and is_open:
+				handle_tab_completion()
+				get_viewport().set_input_as_handled()
+		
 	
 	if is_open and event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -160,6 +170,17 @@ func navigate_history(direction: int):
 		input_field.text = command_history[command_history.size() - 1 - history_index]
 	input_field.caret_column = input_field.text.length()
 
+func navigate_suggestions(direction: int):
+	suggestion_index += direction
+	
+	if suggestion_index < 0:
+		suggestion_index = current_suggestions.size() - 1
+	elif suggestion_index >= current_suggestions.size():
+		suggestion_index = 0
+	
+	suggestion_applied = false
+	update_suggestion_ui()
+
 func text_changed(new_text: String):
 	if is_completing:
 		return
@@ -169,20 +190,28 @@ func text_changed(new_text: String):
 	base_prefix = new_text
 	current_suggestions = processor.get_suggestions(new_text)
 	suggestion_index = -1
+	suggestion_applied = false
 	update_suggestion_ui()
 
 func handle_tab_completion():
 	if current_suggestions.is_empty():
 		return
+	
+	if suggestion_index == -1:
+		suggestion_index = 0
+	elif suggestion_applied:
+		suggestion_index = (suggestion_index + 1) % current_suggestions.size()
+	
 	is_completing = true
-	suggestion_index = (suggestion_index + 1) % current_suggestions.size()
+	
 	var selected_cmd = current_suggestions[suggestion_index]
 	input_field.text = selected_cmd
 	input_field.caret_column = selected_cmd.length()
 	
-	update_suggestion_ui()
-	
 	is_completing = false
+	suggestion_applied = true
+	
+	update_suggestion_ui()
 
 func update_suggestion_ui():
 	if current_suggestions.is_empty():
@@ -192,7 +221,7 @@ func update_suggestion_ui():
 	for i in range(current_suggestions.size()):
 		var cmd = current_suggestions[i]
 		if i == suggestion_index:
-			suggestion_text.append("[color=yellow][u]%s[/u][/color]\n" % cmd)
+			suggestion_text.append("[color=yellow]%s[/color]\n" % cmd)
 		else:
 			suggestion_text.append("[color=gray]%s[/color]\n" % cmd)
 	
