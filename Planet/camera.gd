@@ -1,3 +1,4 @@
+class_name FreeCam
 extends CharacterBody3D
 
 const MIN_SPEED = 1.0

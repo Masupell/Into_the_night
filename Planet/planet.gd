@@ -58,13 +58,22 @@ var world_commands: WorldCommands
 
 var edge_length: float = (radius * 2.0) / sqrt(3.0)
 
+@export var plane: AirPlane
+@export var free_cam: FreeCam
+@export var flight_hud: FligthHUD
+@export var canvas_layer: CanvasLayer
+
+var true_x: float = 0.0
+var true_y: float = 0.0
+var true_z: float = 0.0
+
 func _ready() -> void:
 	
 	#for level in range(17):
 		#var chunk_world_size = (radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, ": ", chunk_world_size)
 	
-	$Plane.global_position = $Camera.global_position
+	plane.global_position = free_cam.global_position
 	
 	planet_seed = randi()
 	#generate_world_texture()
@@ -170,7 +179,6 @@ func return_chunk(c: Chunk):
 	free_chunks.append(c)
 	#if c.get_parent():
 		#c.get_parent().remove_child(c)
-
 
 static func spherify(p: Vector3) -> Vector3:
 	var x2 := p.x * p.x
@@ -278,7 +286,7 @@ func update_orbit_speed():
 func set_time_hours(target_hours: float):
 	var hours = wrapf(target_hours, 0.0, 24.0)
 	
-	var planet_up = $Plane.global_position.normalized() # Have to change that later, but for now it works
+	var planet_up = plane.global_position.normalized() # Have to change that later, but for now it works
 	var plane_equator = planet_up.slide(Vector3.DOWN).normalized() #Vector3.DOWN is northpole
 	var plane_longitude = atan2(plane_equator.z, plane_equator.x)
 	sun_orbit_angle = ((hours - 12.0) / 24.0) * TAU + plane_longitude
@@ -291,28 +299,27 @@ func set_time_speed(multiplier: float):
 
 
 func switch_to_free(debug: bool = false):
-	var plane_camera = $Plane/Pivot/SpringArm3D/Camera3D
-	$Camera/Camera3D.rotation = Vector3.ZERO
-	$Camera.global_transform = plane_camera.global_transform
-	$Camera/Camera3D.current = true
-	camera = $Camera/Camera3D
-	$Camera.process_mode = Node.PROCESS_MODE_INHERIT
-	$CanvasLayer.visible = true
-	$FlightHud.visible = false
-	camera_mode = $Camera.set_debug_mode(debug)
+	var plane_camera = plane.camera
+	free_cam.main_camera.rotation = Vector3.ZERO
+	free_cam.global_transform = plane_camera.global_transform
+	free_cam.main_camera.current = true
+	camera = camera.main_camera
+	free_cam.process_mode = Node.PROCESS_MODE_INHERIT
+	canvas_layer.visible = true
+	flight_hud.visible = false
+	camera_mode = free_cam.set_debug_mode(debug)
 
 func switch_to_plane(): # kind of switches to plane from old free position, because I never changed the code her
-	var free_cam = $Camera/Camera3D
-	var pivot = $Plane/Pivot
-	var spring = $Plane/Pivot/SpringArm3D
+	var pivot = plane.pivot
+	var spring = plane.spring_arm
 	pivot.global_basis = free_cam.global_basis
 	var forward = -free_cam.global_basis.z
-	$Plane.global_position = free_cam.global_position + forward * spring.spring_length
-	$Plane.global_basis = free_cam.global_basis
-	$Plane.velocity = Vector3.ZERO
-	$Plane/Pivot/SpringArm3D/Camera3D.current = true
-	camera = $Plane/Pivot/SpringArm3D/Camera3D
-	$Camera.process_mode = Node.PROCESS_MODE_DISABLED
-	$CanvasLayer.visible = false
-	$FlightHud.visible = true
+	plane.global_position = free_cam.global_position + forward * spring.spring_length
+	plane.global_basis = free_cam.global_basis
+	plane.velocity = Vector3.ZERO
+	plane.camera.current = true
+	camera = plane.camera
+	free_cam.process_mode = Node.PROCESS_MODE_DISABLED
+	canvas_layer.visible = false
+	flight_hud.visible = true
 	camera_mode = 1

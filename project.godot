@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Into the Night"
-run/main_scene="uid://ccha377xjouqv"
+run/main_scene="uid://dqf8cebj85awn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 

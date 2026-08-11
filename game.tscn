@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://dqf8cebj85awn"]
+
+[ext_resource type="PackedScene" uid="uid://clrkw476pp5vs" path="res://Plane/plane.tscn" id="1_80nbo"]
+[ext_resource type="PackedScene" uid="uid://ccha377xjouqv" path="res://Planet/planet.tscn" id="1_ryrav"]
+[ext_resource type="Script" uid="uid://bimb2hbeu4ma2" path="res://Planet/camera.gd" id="2_e2o6t"]
+[ext_resource type="PackedScene" uid="uid://dpmivd6uisae0" path="res://Chat/command_consule.tscn" id="3_7jktm"]
+[ext_resource type="PackedScene" uid="uid://cxod68oswlvw3" path="res://Plane/Hud/flight_hud.tscn" id="4_ryrav"]
+[ext_resource type="Script" uid="uid://d4nlbeiwft36b" path="res://Chat/command_processor.gd" id="5_eow3j"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_feb5d"]
+radius = 1.5
+
+[node name="Game" type="Node3D" unique_id=1528733142]
+
+[node name="Planet" parent="." unique_id=262084446 node_paths=PackedStringArray("command_processor", "plane", "free_cam", "flight_hud", "canvas_layer") instance=ExtResource("1_ryrav")]
+command_processor = NodePath("../CommandProcessor")
+plane = NodePath("../Plane")
+free_cam = NodePath("../Camera")
+flight_hud = NodePath("../FlightHud")
+canvas_layer = NodePath("../CanvasLayer")
+
+[node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud", "sun_light", "console") instance=ExtResource("1_80nbo")]
+hud = NodePath("../FlightHud")
+sun_light = NodePath("../Planet/DirectionalLight3D")
+console = NodePath("../CommandConsule")
+
+[node name="Camera" type="CharacterBody3D" parent="." unique_id=1443870062 node_paths=PackedStringArray("console")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
+collision_layer = 2
+script = ExtResource("2_e2o6t")
+console = NodePath("../CommandConsule")
+
+[node name="Camera3D" type="Camera3D" parent="Camera" unique_id=1400018597]
+current = true
+far = 100000.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Camera" unique_id=96278386]
+shape = SubResource("SphereShape3D_feb5d")
+
+[node name="Debug" type="Camera3D" parent="." unique_id=897326935]
+far = 100000.0
+
+[node name="CommandConsule" parent="." unique_id=1685191752 instance=ExtResource("3_7jktm")]
+
+[node name="FlightHud" parent="." unique_id=357306920 instance=ExtResource("4_ryrav")]
+visible = false
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1342603709]
+
+[node name="Label" type="Label" parent="CanvasLayer" unique_id=2072786753]
+offset_right = 40.0
+offset_bottom = 23.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+
+[node name="CommandProcessor" type="Node" parent="." unique_id=572393034 node_paths=PackedStringArray("console")]
+script = ExtResource("5_eow3j")
+console = NodePath("../CommandConsule")
+
+[editable path="Planet"]
