@@ -12,7 +12,7 @@ func _init(_name: String) -> void:
 	name = _name
 
 func add_child_node(node: CommandNode) -> CommandNode:
-	children[node.name.to_lower()] = node
+	children[node.name] = node
 	return node
 
 func executes(target_callback: Callable) -> CommandNode:
@@ -21,3 +21,12 @@ func executes(target_callback: Callable) -> CommandNode:
 
 func can_execute() -> bool:
 	return callback.is_valid()
+
+func parse(_token: String) -> bool:
+	return false
+
+func contribute_to_context(_context: CommandContext, _token: String):
+	pass
+
+func get_completions(_prefix: String) -> Array[String]:
+	return []

@@ -6,8 +6,8 @@ extends CharacterBody3D
 @export var stall_speed := 30.0 # speed, where lift equals gravity (so no tipping down anymore)
 @export var lift_efficiency := 1.0 # heavier planes are more sluggish, fighter jets quite efficient
 
-@export var max_speed := 65.0
-@export var acceleration := 3.0
+@export var max_speed := 667.0
+@export var acceleration := 100.0
 
 @export var air_align_speed := 3.0
 @export var lift_damping_speed := 4.0 # wings bleeding off downwards speed

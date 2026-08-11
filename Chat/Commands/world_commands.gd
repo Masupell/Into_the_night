@@ -13,201 +13,175 @@ func _init(processor: CommandProcessor, _planet: Planet) -> void:
 	register_all()
 
 func register_all():
-	pass
-	#command_processor.register_command("time", cmd_time, 
-	#"Sets local time or adjusts time speed.",
-	#"/time set <HH:MM or number or \n['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']> \nOr /time speed <multiplier>",
-	#{
-		#"set": ["Dawn", "Morning", "Noon", "AfterNoon", "Dusk", "Night"],
-		#"speed": []
-	#})
-	#
-	#command_processor.register_command("wireframe", cmd_wireframe,
-	#"Enables or disables wireframe view",
-	#"/wireframe <1 or 2> (1 for default no wireframe, 2 for wireframe)",
-	#["1", "2"])
-	#
-	#command_processor.register_command("camera", cmd_camera,
-	#"Switches between plane, freecam and debug cam",
-	#"/camera <plane or freecam/free or debug or <1 or 2 or 3>",
-	#["plane", "free", "freecam", "debug", "1", "2", "3"])
-	#
-	#command_processor.register_command("atmosphere", cmd_atmosphere,
-	#"Currently just show or hide", 
-	#"/atmosphere <show or hide>",
-	#["show", "hide"])
-	#
-	#command_processor.register_command("chunk", cmd_chunk,
-	#"Different things with the chunks, only for debug right now",
+	var time_command = "time { set <time:any|dawn,morning,noon,afternoon,dusk,night> | speed <multiplier:float> }"
+	command_processor.register_command_multiple(time_command, self, "Sets local time or adjusts time speed.",
+	{
+		"time": {
+			"dawn": 5.0,
+			"morning": 7.0,
+			"noon": 12.0,
+			"afternoon": 13.0,
+			"dusk": 17.75,
+			"night": 24.0,
+		}
+	})
+	
+	var camera_command = "camera <mode:any|plane,free,debug>"
+	command_processor.register_command(camera_command, cmd_camera, "Switches between plane, freecam and debug cam",
+	{
+		"mode":
+			{
+				"plane": 1,
+				"free": 2,
+				"debug": 3
+			}
+	})
+	
 	#"/chunk border <show or hide> or /chunk lod <show or hide>",
-	#{
-		#"border": ["show", "hide"],
-		#"lod": ["show", "hide"]
-	#})
-
-func cmd_time(args: Array[String]) -> String:
-	if args.size() < 2:
-		return "Missing Arguments"
-	var sub_command = args[0]
-	var value_str = args[1]
+	var chunk_command = "chunk { border <visible:any|show,hide> | lod <visible:any:show,hide> }" # 1 for visible, 0 for hidden
+	command_processor.register_command_multiple(chunk_command, self, "Different things with the chunks, only for debug right now",
+	{
+		"visible":
+			{
+				"show": 1,
+				"hide": 2
+			}
+	})
 	
-	match sub_command:
-		"set":
-			var hours: float = 0.0
-			if ":" in value_str:
-				var time_parts = value_str.split(":")
-				if time_parts.size() == 2 and time_parts[0].is_valid_int() and time_parts[1].is_valid_int():
-					var h = time_parts[0].to_int()
-					var m = time_parts[1].to_int()
-					hours = h + (m/60.0)
-				else:
-					return "Invalid time format. Use HH:MM or a number."
-			elif value_str.is_valid_float():
-				hours = value_str.to_float()
-			else:
-				match value_str.to_lower():
-					"dawn":
-						hours = 5.0
-					"morning":
-						hours = 7.0
-					"noon":
-						hours = 12.0
-					"afternoon":
-						hours = 13.0
-					"dusk":
-						hours = 17.75
-					"night":
-						hours = 24.0
-					_:
-						return "Invalid Time. Use ['Dawn', 'Morning', 'Noon', 'AfterNoon', 'Dusk', Night']"
-			planet.set_time_hours(hours)
-			var h_int = int(hours)
-			var m_int = int((hours - h_int) * 60.0)
-			command_processor.console.add_message("[color=green]Time set to %02d:%02d[/color]" % [h_int, m_int])
-			return ""
-		"speed":
-			if not value_str.is_valid_float():
-				return "Speed multiplier must be a number"
-			var speed_val = value_str.to_float()
-			planet.set_time_speed(speed_val)
-			command_processor.console.add_message("[color=green]Time speed multiplier set to %.1fx[/color]" % speed_val)
-			return ""
-		_:
-			return "Unknown subcommand '%s'. Use 'set' or 'speed'." % sub_command
+	var atmosphere_command = "atmosphere <visible:any|show,hide>"
+	command_processor.register_command(atmosphere_command, cmd_atmosphere, "Currently just show or hide",
+	{
+		"visible":
+			{
+				"show": 1,
+				"hide": 2
+			}
+	})
+	
+	var wireframe_toggle_command = "wireframe <visible:any|show,hide>"
+	command_processor.register_command(wireframe_toggle_command, cmd_wireframe, "Currently just show or hide",
+	{
+		"visible":
+			{
+				"show": 1,
+				"hide": 2
+			}
+	})
 
-func cmd_wireframe(args: Array[String]) -> String:
-	if args.is_empty():
-		return "Missing Arguments"
-	if args[0].is_valid_int():
-		var value = args[0].to_int()
-		if value == 1:
-			if planet.get_viewport().debug_draw != Viewport.DEBUG_DRAW_DISABLED:
-				planet.get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
-				command_processor.console.add_message("[color=green]Wireframe mode disabled[/color]")
-			return ""
-		elif value == 2:
-			if planet.get_viewport().debug_draw != Viewport.DEBUG_DRAW_WIREFRAME:
-				planet.get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
-				command_processor.console.add_message("[color=green]Wireframe mode enabled[/color]")
-			return ""
-		else:
-			return "Only '1' or '2'"
-	return "Invalid Number"
 
-func cmd_camera(args: Array[String]) -> String:
-	if args.is_empty():
-		return "Missing Arguments"
-	var value_str = args[0]
-	if value_str.is_valid_int():
-		match value_str.to_int():
-			1:
-				if planet.camera_mode != 1:
-					planet.switch_to_plane()
-					command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
-				return ""
-			2:
-				if planet.camera_mode != 2:
-					planet.switch_to_free()
-					command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
-				return ""
-			3:
-				if planet.camera_mode != 3:
-					planet.switch_to_free(true)
-					command_processor.console.add_message("[color=green]Switched to debug[/color]")
-				return ""
-			_:
-				return "Invalid Argument"
+# In match statements, the _: branch will never trigger, because it gets evaluated before that
+
+func cmd_time_set(ctx: CommandContext) -> String:
+	var value = ctx.get_argument("time")
+	var hours: float
+
+	if value is float:
+		hours = value
 	else:
-		match value_str.to_lower():
-			"plane":
-				if planet.camera_mode != 1:
-					planet.switch_to_plane()
-					command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
-				return ""
-			"free", "freecam":
-				if planet.camera_mode != 2:
-					planet.switch_to_free()
-					command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
-				return ""
-			"debug":
-				if planet.camera_mode != 3:
-					planet.switch_to_free(true)
-					command_processor.console.add_message("[color=green]Switched to debug[/color]")
-				return ""
-			_:
-				return "Invalid Argument"
+		var text: String = value
+		if ":" in text:
+			var parts := text.split(":")
+			if parts.size() == 2 and parts[0].is_valid_int() and parts[1].is_valid_int():
+				hours = parts[0].to_int() + parts[1].to_int() / 60.0
+			else:
+				return "Invalid time format. Use HH:MM or a number."
+		else:
+			hours = text.to_float()
 
-func cmd_atmosphere(args: Array[String]) -> String:
-	if args.is_empty():
-		return "Missing Arguments"
-	match args[0].to_lower():
-		"show":
-			planet.atmosphere.show()
-			command_processor.console.add_message("[color=green]Atmosphere Shown[/color]")
-			return ""
-		"hide":
-			planet.atmosphere.hide()
-			command_processor.console.add_message("[color=green]Atmosphere Hidden[/color]")
-			return ""
-		_:
-			return "Invalid Argument"
+	planet.set_time_hours(hours)
+	var h_int := int(hours)
+	var m_int := int((hours - h_int) * 60.0)
+	command_processor.console.add_message("[color=green]Time set to %02d:%02d[/color]" % [h_int, m_int])
+	return ""
 
-func cmd_chunk(args: Array[String]) -> String:
-	if args.size() < 2:
-		return "Missing Arguments"
-	var sub_command = args[0]
-	var value_str = args[1]
+func cmd_time_speed(ctx: CommandContext) -> String:
+	var speed := ctx.get_float("multiplier")
+	planet.set_time_speed(speed)
+	command_processor.console.add_message("[color=green]Time speed multiplier set to %.1fx[/color]" % speed)
+	return ""
+
+func cmd_camera(context: CommandContext) -> String:
+	var value := context.get_int("mode")
 	
-	match sub_command.to_lower():
-		"border":
-			match value_str.to_lower():
-				"show":
-					if !show_borders:
+	match value:
+		1:
+			if planet.camera_mode != 1:
+				planet.switch_to_plane()
+				command_processor.console.add_message("[color=green]Switched to Plane View[/color]")
+		2:
+			if planet.camera_mode != 2:
+				planet.switch_to_free()
+				command_processor.console.add_message("[color=green]Switched to free fly mode[/color]")
+		3:
+			if planet.camera_mode != 3:
+				planet.switch_to_free(true)
+				command_processor.console.add_message("[color=green]Switched to debug[/color]")
+		_:
+			return "Invalid Argument. Expected 1/plane, 2/free, or 3/debug."
+	return ""
+
+func cmd_chunk_border(context: CommandContext) -> String:
+	var value := context.get_int("visible")
+	
+	match value:
+		1:
+			if !show_borders:
 						show_borders = true
 						RenderingServer.global_shader_parameter_set("show_borders", true)
 						command_processor.console.add_message("[color=green]Borders Shown[/color]")
-				"hide":
-					if show_borders:
+		2:
+			if show_borders:
 						show_borders = false
 						RenderingServer.global_shader_parameter_set("show_borders", false)
 						command_processor.console.add_message("[color=green]Borders Hidden[/color]")
-				_:
-					return "Invalid Argument: '%s'" % value_str
-			return ""
-		"lod":
-			match value_str.to_lower():
-				"show":
-					if !show_lod:
-						show_lod = true
+		_: 
+			return "Invalid Argument '%s', Only 1/show or 2/hide is permitted" % context.get_string("visible")
+	return ""
+
+func cmd_chunk_lod(context: CommandContext) -> String:
+	var value := context.get_int("visible")
+	
+	match value:
+		1:
+			if !show_borders:
+						show_borders = true
 						RenderingServer.global_shader_parameter_set("show_lod", true)
 						command_processor.console.add_message("[color=green]Showing Lod[/color]")
-				"hide":
-					if show_lod:
-						show_lod = false
+		2:
+			if show_borders:
+						show_borders = false
 						RenderingServer.global_shader_parameter_set("show_lod", false)
 						command_processor.console.add_message("[color=green]Lod colors Hidden[/color]")
-				_:
-					return "Invalid Argument: '%s'" % value_str
-			return ""
+		_: 
+			return "Invalid Argument '%s', Only 1/show or 2/hide is permitted" % context.get_string("visible")
+	return ""
+
+func cmd_atmosphere(ctx: CommandContext) -> String:
+	var value := ctx.get_int("visible")
+	
+	match value:
+		1:
+			planet.atmosphere.show()
+			command_processor.console.add_message("[color=green]Atmosphere Shown[/color]")
+		2:
+			planet.atmosphere.hide()
+			command_processor.console.add_message("[color=green]Atmosphere Hidden[/color]")
 		_:
-			return "Invalid Argument: '%s'" % sub_command
+			return "Invalid Argument"
+	return ""
+
+func cmd_wireframe(ctx: CommandContext) -> String:
+	var value := ctx.get_int("visible")
+	
+	match value:
+		1:
+			if planet.get_viewport().debug_draw != Viewport.DEBUG_DRAW_WIREFRAME:
+				planet.get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
+				command_processor.console.add_message("[color=green]Wireframe mode enabled[/color]")
+		2:
+			if planet.get_viewport().debug_draw != Viewport.DEBUG_DRAW_DISABLED:
+				planet.get_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
+				command_processor.console.add_message("[color=green]Wireframe mode disabled[/color]")
+		_:
+			return "Invalid Argument"
+	return ""
