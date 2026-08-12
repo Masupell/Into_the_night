@@ -196,6 +196,10 @@ func shift_origin(moved_by: Vector3):
 	true_y += moved_by.y
 	true_z += moved_by.z
 	global_position = -get_true_position()
+	
+	# temprorary for plane
+	if camera_mode != 1 and plane:
+		plane.global_position -= moved_by
 
 # At start of game and after potential teleports
 func seed_origin_from(world_pos: Vector3):

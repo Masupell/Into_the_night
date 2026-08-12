@@ -86,7 +86,7 @@ func _physics_process(delta: float) -> void:
 	if not planet:
 		return
 	
-	var true_pos = planet.get_true_position()
+	var true_pos = global_position - planet.global_position #planet.get_true_position() -> Only works if plane is active
 	if true_pos.length_squared() < 0.001:
 		return
 	var planet_up = true_pos.normalized()
@@ -154,7 +154,7 @@ func _physics_process(delta: float) -> void:
 	if planet.camera_mode == 1 and global_position != Vector3.ZERO:
 		planet.shift_origin(global_position)
 		global_position = Vector3.ZERO
-	true_pos = planet.get_true_position()
+	true_pos = global_position - planet.global_position #planet.get_true_position()
 	
 	
 	#Animation
