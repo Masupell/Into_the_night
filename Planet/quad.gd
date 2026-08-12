@@ -264,7 +264,7 @@ func draw_chunk():
 	var stitch_e = e_nb != null and e_nb.level < level
 	var stitch_w = w_nb != null and w_nb.level < level
 	
-	var dist_to_player = bounding_center.distance_squared_to(planet.camera.global_position)
+	var dist_to_player = bounding_center.distance_squared_to(planet.get_true_position())
 	var needs_collision = dist_to_player < 90000.0 
 	
 	#if level > highest_lod:

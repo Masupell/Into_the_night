@@ -19,16 +19,17 @@ free_cam = NodePath("../Camera")
 flight_hud = NodePath("../FlightHud")
 canvas_layer = NodePath("../CanvasLayer")
 
-[node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud", "sun_light", "console") instance=ExtResource("1_80nbo")]
+[node name="Plane" parent="." unique_id=155938384 node_paths=PackedStringArray("hud", "planet", "console") instance=ExtResource("1_80nbo")]
 hud = NodePath("../FlightHud")
-sun_light = NodePath("../Planet/DirectionalLight3D")
+planet = NodePath("../Planet")
 console = NodePath("../CommandConsule")
 
-[node name="Camera" type="CharacterBody3D" parent="." unique_id=1443870062 node_paths=PackedStringArray("console")]
+[node name="Camera" type="CharacterBody3D" parent="." unique_id=1443870062 node_paths=PackedStringArray("console", "planet")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
 collision_layer = 2
 script = ExtResource("2_e2o6t")
 console = NodePath("../CommandConsule")
+planet = NodePath("../Planet")
 
 [node name="Camera3D" type="Camera3D" parent="Camera" unique_id=1400018597]
 current = true
@@ -56,5 +57,3 @@ theme_override_constants/outline_size = 3
 [node name="CommandProcessor" type="Node" parent="." unique_id=572393034 node_paths=PackedStringArray("console")]
 script = ExtResource("5_eow3j")
 console = NodePath("../CommandConsule")
-
-[editable path="Planet"]

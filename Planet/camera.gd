@@ -20,6 +20,8 @@ var controlled_camera: Node3D
 @export var console: CommandConsule
 var is_typing: bool = false
 
+@export var planet: Planet
+
 func _ready():
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	controlled_camera = main_camera
@@ -64,16 +66,17 @@ func _process(delta):
 	if Input.is_key_pressed(KEY_E):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
 	
+	var active = planet and planet.camera_mode != 1
 	if debug_mode:
 		velocity = Vector3.ZERO
-		controlled_camera.global_position += direction.normalized() * move_speed * delta
+		if direction != Vector3.ZERO and active:
+			planet.shift_origin(direction.normalized() * move_speed * delta)
 	else:
-		if direction != Vector3.ZERO:
-			velocity = direction.normalized() * move_speed
-		else:
-			velocity = Vector3.ZERO 
-		
+		velocity = direction.normalized() * move_speed if direction != Vector3.ZERO else Vector3.ZERO
 		move_and_slide()
+		if active and global_position != Vector3.ZERO:
+			planet.shift_origin(global_position)
+			global_position = Vector3.ZERO
 	
 	if Input.is_key_pressed(KEY_TAB):
 		print(global_position)
@@ -81,8 +84,8 @@ func _process(delta):
 	if Input.is_action_just_released("ui_up"):
 		var cube_scene = preload("res://temp/cube.tscn")
 		var cube = cube_scene.instantiate()
-		get_parent().add_child(cube)
-		cube.global_position = global_position
+		planet.add_child(cube)
+		cube.global_position = controlled_camera.global_position
 
 func set_debug_mode(debug: bool) -> int:
 	debug_mode = debug

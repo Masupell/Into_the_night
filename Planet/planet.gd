@@ -63,6 +63,7 @@ var edge_length: float = (radius * 2.0) / sqrt(3.0)
 @export var flight_hud: FligthHUD
 @export var canvas_layer: CanvasLayer
 
+# True position of the controller that owns the current camera, relative to the planets center
 var true_x: float = 0.0
 var true_y: float = 0.0
 var true_z: float = 0.0
@@ -73,7 +74,10 @@ func _ready() -> void:
 		#var chunk_world_size = (radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, ": ", chunk_world_size)
 	
-	plane.global_position = free_cam.global_position
+	#plane.global_position = free_cam.global_position
+	seed_origin_from(free_cam.global_position)
+	free_cam.global_position = Vector3.ZERO
+	plane.global_position = Vector3.ZERO
 	
 	planet_seed = randi()
 	#generate_world_texture()
@@ -103,7 +107,7 @@ func _ready() -> void:
 	
 	var atmosphere_material = ShaderMaterial.new()
 	atmosphere_material.shader = preload("res://Planet/atmosphere.gdshader")
-	atmosphere_material.render_priority = -10
+	atmosphere_material.render_priority = 10
 	atmosphere_material.set_shader_parameter("planet_radius", radius)
 	atmosphere_material.set_shader_parameter("atmosphere_radius", atmosphere_radius)
 	atmosphere.material_override = atmosphere_material
@@ -136,7 +140,8 @@ func _process(delta: float) -> void:
 		camera = get_viewport().get_camera_3d()
 		return
 	
-	var cam_pos = to_local(camera.global_position) # as long as planet is on 0,0,0 'to_local' does not matter
+	#var cam_pos = to_local(camera.global_position) # as long as planet is on 0,0,0 'to_local' does not matter
+	var cam_pos = get_true_position()
 	var frustum_planes = []
 	for p in camera.get_frustum():
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
@@ -146,7 +151,7 @@ func _process(delta: float) -> void:
 	sun_orbit_angle += orbit_speed * delta
 	update_sun_position()
 	
-	var sun_dir = sun.global_transform.basis.z.normalized()
+	var sun_dir = Vector3(cos(sun_orbit_angle), 0.0, sin(sun_orbit_angle)).normalized()
 	var mat = atmosphere.material_override as ShaderMaterial
 	if mat:
 		mat.set_shader_parameter("sun_dir", sun_dir)
@@ -179,6 +184,25 @@ func return_chunk(c: Chunk):
 	free_chunks.append(c)
 	#if c.get_parent():
 		#c.get_parent().remove_child(c)
+
+
+func get_true_position() -> Vector3:
+	return Vector3(true_x, true_y, true_z)
+
+func shift_origin(moved_by: Vector3):
+	if moved_by == Vector3.ZERO:
+		return
+	true_x += moved_by.x
+	true_y += moved_by.y
+	true_z += moved_by.z
+	global_position = -get_true_position()
+
+# At start of game and after potential teleports
+func seed_origin_from(world_pos: Vector3):
+	true_x = world_pos.x
+	true_y = world_pos.y
+	true_z = world_pos.z
+	global_position = -get_true_position()
 
 static func spherify(p: Vector3) -> Vector3:
 	var x2 := p.x * p.x
@@ -286,7 +310,7 @@ func update_orbit_speed():
 func set_time_hours(target_hours: float):
 	var hours = wrapf(target_hours, 0.0, 24.0)
 	
-	var planet_up = plane.global_position.normalized() # Have to change that later, but for now it works
+	var planet_up = get_true_position().normalized() # Have to change that later, but for now it works
 	var plane_equator = planet_up.slide(Vector3.DOWN).normalized() #Vector3.DOWN is northpole
 	var plane_longitude = atan2(plane_equator.z, plane_equator.x)
 	sun_orbit_angle = ((hours - 12.0) / 24.0) * TAU + plane_longitude
@@ -303,7 +327,7 @@ func switch_to_free(debug: bool = false):
 	free_cam.main_camera.rotation = Vector3.ZERO
 	free_cam.global_transform = plane_camera.global_transform
 	free_cam.main_camera.current = true
-	camera = camera.main_camera
+	camera = free_cam.main_camera
 	free_cam.process_mode = Node.PROCESS_MODE_INHERIT
 	canvas_layer.visible = true
 	flight_hud.visible = false

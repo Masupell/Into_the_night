@@ -59,7 +59,7 @@ var rudder_rest: Vector3
 @export var hud: FligthHUD
 @export var planet_radius: float = 5000.0
 
-@export var sun_light: DirectionalLight3D
+@export var planet: Planet
 
 @export var console: CommandConsule
 var is_typing: bool = false
@@ -83,9 +83,13 @@ func _ready():
 
 
 func _physics_process(delta: float) -> void:
-	if global_position.length_squared() < 0.001: # to not crash, when somehow in 0,0,0
+	if not planet:
 		return
-	var planet_up = global_position.normalized()
+	
+	var true_pos = planet.get_true_position()
+	if true_pos.length_squared() < 0.001:
+		return
+	var planet_up = true_pos.normalized()
 	up_direction = planet_up
 	var forward = global_transform.basis.z
 	
@@ -147,6 +151,12 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	
 	
+	if planet.camera_mode == 1 and global_position != Vector3.ZERO:
+		planet.shift_origin(global_position)
+		global_position = Vector3.ZERO
+	true_pos = planet.get_true_position()
+	
+	
 	#Animation
 	var speed_percent = move_speed / max_speed
 	rotor_speed = ease(speed_percent, 0.5) * max_rotor_speed#lerp(0.0, max_rotor_speed, speed_percent)
@@ -181,17 +191,17 @@ func _physics_process(delta: float) -> void:
 		delta * 10.0
 	)
 	
+	
 	# -- HUD -- #
 	
 	# Raycast for above ground height measure
 	var space_state = get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(global_position, Vector3.ZERO)
+	var query = PhysicsRayQueryParameters3D.create(global_position, global_position - planet_up * planet_radius)
 	query.exclude = [self.get_rid()]
 	var result = space_state.intersect_ray(query)
 	var current_agl: float = -1.0
 	if result:
-		var hit_position: Vector3 = result.position
-		current_agl =global_position.distance_to(hit_position)
+		current_agl =global_position.distance_to(result.position)
 	
 	
 	var world_north_pole = Vector3.DOWN # 'DOWN' Works better here, dont have to reverse sun rotation or planet generation
@@ -208,9 +218,8 @@ func _physics_process(delta: float) -> void:
 	
 	#Time
 	var current_time_hours: float = 0.0
-	if sun_light:
-		# DirectionalLight3D shines along -Z axis, so from planet to light it is +Z
-		var sun_dir = sun_light.global_transform.basis.z.normalized()
+	if planet.sun:
+		var sun_dir = Vector3(cos(planet.sun_orbit_angle), 0.0, sin(planet.sun_orbit_angle)).normalized()#planet.sun.global_transform.basis.z.normalized()
 		var plane_equator = planet_up.slide(world_north_pole).normalized()
 		var sun_equator = sun_dir.slide(world_north_pole).normalized()
 		var plane_sun_cross = plane_equator.cross(sun_equator)
@@ -223,7 +232,7 @@ func _physics_process(delta: float) -> void:
 	if hud:
 		var power = move_speed/max_speed
 		var current_speed = velocity.length()
-		var current_amsl = global_position.length() - planet_radius
+		var current_amsl = true_pos.length() - planet_radius
 		var pitch_rad = asin(clamp(forward.dot(planet_up), -1.0, 1.0))
 		var pitch_deg = rad_to_deg(pitch_rad)
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
@@ -248,7 +257,7 @@ func _physics_process(delta: float) -> void:
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var current_up = global_position.normalized()
+		var current_up = planet.get_true_position().normalized()
 		
 		var yaw_delta = -event.relative.x * camera_sensitivity
 		pivot.global_transform.basis = pivot.global_transform.basis.rotated(current_up, yaw_delta)
