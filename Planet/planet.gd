@@ -74,6 +74,7 @@ func _ready() -> void:
 		#var chunk_world_size = (radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, ": ", chunk_world_size)
 	
+	free_cam.global_position.z = 12000.0
 	#plane.global_position = free_cam.global_position
 	seed_origin_from(free_cam.global_position)
 	free_cam.global_position = Vector3.ZERO

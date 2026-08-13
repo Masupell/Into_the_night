@@ -25,7 +25,6 @@ planet = NodePath("../Planet")
 console = NodePath("../CommandConsule")
 
 [node name="Camera" type="CharacterBody3D" parent="." unique_id=1443870062 node_paths=PackedStringArray("console", "planet")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 12000)
 collision_layer = 2
 script = ExtResource("2_e2o6t")
 console = NodePath("../CommandConsule")
