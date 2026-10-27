@@ -20,7 +20,7 @@ void fragment()
 {
 	ROUGHNESS = roughness;
 	SPECULAR = specular;
-	
+
 	float depth_difference = VERTEX.z - get_linear_depth(SCREEN_UV, INV_PROJECTION_MATRIX);
 	float color_uv = depth_difference / (level - radius);
 	ALBEDO = texture(gradient, vec2(color_uv, 0.0)).rgb;

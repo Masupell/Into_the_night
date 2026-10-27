@@ -12,24 +12,24 @@ void fragment()
     float depth_raw = texture(depth_texture, SCREEN_UV).r;
     vec4 upos = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_raw, 1.0);
     vec3 pixel_position = upos.xyz / upos.w;
-    
+
     float depth_difference = VERTEX.z - pixel_position.z;
     depth_difference = max(0.0, depth_difference);
 
 	// Beer-Lambert law approximation
     float depth_factor = 1.0 - exp(-depth_difference / depth_scale);
-    
+
     vec3 final_color = mix(color_shallow, color_deep, depth_factor);
     float final_alpha = mix(0.35, 1.0, depth_factor);
-    
+
     ALBEDO = final_color;
     ALPHA = final_alpha;
-    
+
     ROUGHNESS = 0.1;  // Once I have an atmosphere
     SPECULAR = 0.9;
-	
+
 	//ROUGHNESS = 0.22;
     //SPECULAR = 0.5;
-	
+
 	//EMISSION = final_color; // While I don't have an atmosphere, so it does not reflect black back
 }

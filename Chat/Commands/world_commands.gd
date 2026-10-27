@@ -30,7 +30,7 @@ func register_all():
 			"night": 24.0,
 		}
 	})
-	
+
 	var camera_command = "camera <mode:any|plane,free,debug>"
 	command_processor.register_command(camera_command, cmd_camera, "Switches between plane, freecam and debug cam",
 	{
@@ -41,19 +41,19 @@ func register_all():
 				"debug": 3
 			}
 	})
-	
+
 	var chunk_command = "chunk { border <visible:any|show,hide> | lod <visible:any|show,hide> }" # 1 for visible, 0 for hidden
 	command_processor.register_command_multiple(chunk_command, self, "Different things with the chunks, only for debug right now",
 	{
 		"visible": VISIBILITY_MAP
 	})
-	
+
 	var atmosphere_command = "atmosphere <visible:any|show,hide>"
 	command_processor.register_command(atmosphere_command, cmd_atmosphere, "Currently just show or hide",
 	{
 		"visible": VISIBILITY_MAP
 	})
-	
+
 	var wireframe_toggle_command = "wireframe <visible:any|show,hide>"
 	command_processor.register_command(wireframe_toggle_command, cmd_wireframe, "Currently just show or hide",
 	{
@@ -94,7 +94,7 @@ func cmd_time_speed(ctx: CommandContext) -> String:
 
 func cmd_camera(context: CommandContext) -> String:
 	var value := context.get_int("mode")
-	
+
 	match value:
 		1:
 			if planet.camera_mode != 1:
@@ -114,7 +114,7 @@ func cmd_camera(context: CommandContext) -> String:
 
 func cmd_chunk_border(context: CommandContext) -> String:
 	var value := context.get_int("visible")
-	
+
 	match value:
 		1:
 			if !show_borders:
@@ -126,13 +126,13 @@ func cmd_chunk_border(context: CommandContext) -> String:
 						show_borders = false
 						RenderingServer.global_shader_parameter_set("show_borders", false)
 						command_processor.console.add_message("[color=green]Borders Hidden[/color]")
-		_: 
+		_:
 			return "Invalid Argument '%s', Only 1/show or 2/hide is permitted" % context.get_string("visible")
 	return ""
 
 func cmd_chunk_lod(context: CommandContext) -> String:
 	var value := context.get_int("visible")
-	
+
 	match value:
 		1:
 			if !show_borders:
@@ -144,13 +144,13 @@ func cmd_chunk_lod(context: CommandContext) -> String:
 						show_borders = false
 						RenderingServer.global_shader_parameter_set("show_lod", false)
 						command_processor.console.add_message("[color=green]Lod colors Hidden[/color]")
-		_: 
+		_:
 			return "Invalid Argument '%s', Only 1/show or 2/hide is permitted" % context.get_string("visible")
 	return ""
 
 func cmd_atmosphere(ctx: CommandContext) -> String:
 	var value := ctx.get_int("visible")
-	
+
 	match value:
 		1:
 			planet.atmosphere.show()
@@ -164,7 +164,7 @@ func cmd_atmosphere(ctx: CommandContext) -> String:
 
 func cmd_wireframe(ctx: CommandContext) -> String:
 	var value := ctx.get_int("visible")
-	
+
 	match value:
 		1:
 			if planet.get_viewport().debug_draw != Viewport.DEBUG_DRAW_WIREFRAME:

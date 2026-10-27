@@ -11,7 +11,7 @@ func _ready() -> void:
 
 func register_command(pattern: String, callback: Callable, description: String = "", arg_value_maps: Dictionary = {}) -> void:
 	_register(pattern, description, arg_value_maps, func(_line): return callback)
- 
+
 func register_command_multiple(pattern: String, target: Object, description: String = "", arg_value_maps: Dictionary = {}) -> void:
 	_register(pattern, description, arg_value_maps, func(line): return _resolve_method_callback(line, target))
 
@@ -20,7 +20,7 @@ func _register(pattern: String, description: String, arg_value_maps: Dictionary,
 	var tokens := CommandParser.tokenize(pattern)
 	if tokens.is_empty():
 		return
- 
+
 	var root_name := tokens[0]
 	for line in CommandParser.expand_branches(tokens):
 		if line.is_empty():
@@ -28,53 +28,53 @@ func _register(pattern: String, description: String, arg_value_maps: Dictionary,
 		var callback: Callable = callback_resolver.call(line)
 		if callback.is_valid():
 			_build_line(line, callback, arg_value_maps)
- 
+
 	_set_root_metadata(root_name, description, pattern)
- 
+
 func _resolve_method_callback(line: Array, target: Object) -> Callable:
 	var literals: Array[String] = []
 	for token in line:
 		var clean: String = String(token).trim_prefix("[").trim_suffix("]")
 		if not (clean.begins_with("<") and clean.ends_with(">")):
 			literals.append(clean.to_lower())
- 
+
 	var method_name := "cmd_" + "_".join(literals)
 	if target.has_method(method_name):
 		return Callable(target, method_name)
- 
+
 	push_error("CommandProcessor: Missing method '%s' on %s for command path: '%s'" % [method_name, target, " ".join(PackedStringArray(literals))])
 	return Callable()
- 
+
 func _build_line(line: Array, callback: Callable, arg_value_maps: Dictionary) -> void:
 	var current: CommandNode = tree.root
 	for token in line:
 		var text: String = String(token)
 		var is_optional := text.begins_with("[") and text.ends_with("]")
 		var clean := text.trim_prefix("[").trim_suffix("]")
- 
+
 		if is_optional:
 			current.executes(callback)
- 
+
 		if clean.begins_with("<") and clean.ends_with(">"):
 			current = _get_or_create_argument(current, clean, arg_value_maps)
 		else:
 			current = _get_or_create_literal(current, clean)
- 
+
 	current.executes(callback)
- 
+
 func _get_or_create_literal(parent: CommandNode, token_name: String) -> CommandNode:
 	if not parent.children.has(token_name):
 		parent.add_child_node(LiteralNode.new(token_name))
 	return parent.children[token_name]
- 
+
 func _get_or_create_argument(parent: CommandNode, raw_token: String, arg_value_maps: Dictionary) -> CommandNode:
 	var body := raw_token.substr(1, raw_token.length() - 2)
 	var parts := body.split(":")
 	var arg_name := parts[0].strip_edges()
- 
+
 	var arg_type := ArgumentNode.Type.STRING
 	var suggestions: Array[String] = []
- 
+
 	if parts.size() == 2:
 		var type_and_options := parts[1].split("|")
 		arg_type = _parse_arg_type(type_and_options[0].strip_edges())
@@ -83,12 +83,12 @@ func _get_or_create_argument(parent: CommandNode, raw_token: String, arg_value_m
 				var clean_option := option.strip_edges()
 				if not clean_option.is_empty():
 					suggestions.append(clean_option)
- 
+
 	if not parent.children.has(arg_name):
 		var value_map: Dictionary = arg_value_maps.get(arg_name, {})
 		parent.add_child_node(ArgumentNode.new(arg_name, arg_type, suggestions, value_map))
 	return parent.children[arg_name]
- 
+
 func _parse_arg_type(type_str: String) -> ArgumentNode.Type:
 	match type_str:
 		"int":
@@ -99,7 +99,7 @@ func _parse_arg_type(type_str: String) -> ArgumentNode.Type:
 			return ArgumentNode.Type.ANY
 		_:
 			return ArgumentNode.Type.STRING
- 
+
 func _set_root_metadata(root_name: String, description: String, pattern: String) -> void:
 	if tree.root.children.has(root_name):
 		var root_node: CommandNode = tree.root.children[root_name]
@@ -120,7 +120,7 @@ func process_command(text: String):
 
 func cmd_help(ctx: CommandContext) -> String:
 	var target_name := ctx.get_string("command_name").to_lower()
-	
+
 	if not target_name.is_empty():
 		if tree.root.children.has(target_name):
 			var cmd: CommandNode = tree.root.children[target_name]
@@ -134,7 +134,7 @@ func cmd_help(ctx: CommandContext) -> String:
 			if cmd.name == "help":
 				continue
 			console.add_message("[color=cyan]/%-10s[/color] - %s" % [cmd.name, cmd.description])
-	
+
 	return ""
 
 

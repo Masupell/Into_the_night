@@ -5,7 +5,7 @@ const MIN_SPEED = 1.0
 const MAX_SPEED = 10000.0
 @export var move_speed: float = 2000.0
 @export var look_sensitivity: float = 0.1
-@export var planet_position := Vector3.ZERO 
+@export var planet_position := Vector3.ZERO
 
 var debug_mode := false
 
@@ -25,9 +25,9 @@ var is_typing: bool = false
 func _ready():
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	controlled_camera = main_camera
-	
+
 	text.text = str(move_speed) + "m/s  --  " + str(move_speed*3.6) + "km/h"
-	
+
 	if console:
 		console.console_toggled.connect(func(open: bool): is_typing = open)
 
@@ -35,7 +35,7 @@ func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		controlled_camera.rotate_object_local(Vector3.UP, deg_to_rad(-event.relative.x * look_sensitivity))
 		controlled_camera.rotate_object_local(Vector3.RIGHT, deg_to_rad(-event.relative.y * look_sensitivity))
-		
+
 	if event is InputEventMouseButton and event.is_pressed():
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			move_speed *= 1.2
@@ -45,7 +45,7 @@ func _input(event):
 		move_speed = clamp(move_speed, MIN_SPEED, MAX_SPEED)
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		
+
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -53,19 +53,19 @@ func _input(event):
 func _process(delta):
 	if is_typing:
 		return
-	
+
 	var direction = Vector3.ZERO
-	
+
 	if Input.is_key_pressed(KEY_W): direction -= controlled_camera.global_transform.basis.z
 	if Input.is_key_pressed(KEY_S): direction += controlled_camera.global_transform.basis.z
 	if Input.is_key_pressed(KEY_A): direction -= controlled_camera.global_transform.basis.x
 	if Input.is_key_pressed(KEY_D): direction += controlled_camera.global_transform.basis.x
-	
+
 	if Input.is_key_pressed(KEY_Q):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(-60.0 * delta))
 	if Input.is_key_pressed(KEY_E):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
-	
+
 	var active = planet and planet.camera_mode != 1
 	if debug_mode:
 		velocity = Vector3.ZERO
@@ -77,10 +77,10 @@ func _process(delta):
 		if active and global_position != Vector3.ZERO:
 			planet.shift_origin(global_position)
 			global_position = Vector3.ZERO
-	
+
 	if Input.is_key_pressed(KEY_TAB):
 		print(global_position)
-		
+
 	if Input.is_action_just_released("ui_up"):
 		var cube_scene = preload("res://temp/cube.tscn")
 		var cube = cube_scene.instantiate()

@@ -18,7 +18,7 @@ void fragment()
 {
 	SPECULAR = specular;
 	ROUGHNESS = roughness;
-	
+
 	float color_uv = (length(world_vert.xyz) - radius) / height;
 	ALBEDO = texture(gradient, vec2(color_uv, 0.0)).rgb;
 }

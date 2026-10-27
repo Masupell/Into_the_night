@@ -34,10 +34,10 @@ func _ready() -> void:
 	input_field.hide()
 	input_field.text_submitted.connect(text_submitted)
 	input_field.text_changed.connect(text_changed)
-	
+
 	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	
+
 	setup_suggestion_overlay()
 
 func setup_suggestion_overlay():
@@ -45,7 +45,7 @@ func setup_suggestion_overlay():
 	wrapper.custom_minimum_size.y = 0
 	input_field.get_parent().add_child(wrapper)
 	input_field.get_parent().move_child(wrapper, input_field.get_index())
-	
+
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.08, 0.08, 0.85)
 	style.content_margin_left = 8
@@ -54,7 +54,7 @@ func setup_suggestion_overlay():
 	style.content_margin_bottom = 6
 	style.corner_radius_top_left = 4
 	style.corner_radius_top_right = 4
-	
+
 	suggestion_panel = PanelContainer.new()
 	suggestion_panel.add_theme_stylebox_override("panel", style)
 	suggestion_panel.anchor_left = 0.0
@@ -64,7 +64,7 @@ func setup_suggestion_overlay():
 	suggestion_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	suggestion_panel.hide()
 	wrapper.add_child(suggestion_panel)
-	
+
 	suggestion_label = RichTextLabel.new()
 	suggestion_label.bbcode_enabled = true
 	suggestion_label.fit_content = true
@@ -100,8 +100,8 @@ func _input(event: InputEvent) -> void:
 			elif event.keycode == KEY_TAB and is_open:
 				handle_tab_completion()
 				get_viewport().set_input_as_handled()
-		
-	
+
+
 	if is_open and event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			var scroll_step = 30
@@ -119,7 +119,7 @@ func open_console(initial_text: String = ""):
 	input_field.text = initial_text
 	input_field.caret_column = input_field.text.length()
 	input_field.grab_focus()
-	
+
 	for child in message_container.get_children():
 		if child is Control:
 			if child.has_meta("tween"):
@@ -127,10 +127,10 @@ func open_console(initial_text: String = ""):
 				if active_tween and active_tween.is_valid():
 					active_tween.kill()
 			child.modulate.a = 1.0
-	
+
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	console_toggled.emit(true)
-	
+
 	scroll_to_bottom()
 	text_changed(initial_text)
 
@@ -139,13 +139,13 @@ func close_console():
 	input_field.clear()
 	input_field.hide()
 	input_field.release_focus()
-	
+
 	history_index = -1
 	draft_text = ""
-	
+
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	console_toggled.emit(false)
-	
+
 	var current_time_sec = Time.get_ticks_msec() / 1000.0
 	for child in message_container.get_children():
 		if child is Control:
@@ -156,14 +156,14 @@ func navigate_history(direction: int):
 		return
 	if history_index == -1 and direction == 1:
 		draft_text = input_field.text
-	
+
 	var new_index = history_index + direction
 	new_index = clamp(new_index, -1, command_history.size() - 1)
-	
+
 	if new_index == history_index:
 		return
 	history_index = new_index
-	
+
 	if history_index == -1:
 		input_field.text = draft_text
 	else:
@@ -172,12 +172,12 @@ func navigate_history(direction: int):
 
 func navigate_suggestions(direction: int):
 	suggestion_index += direction
-	
+
 	if suggestion_index < 0:
 		suggestion_index = current_suggestions.size() - 1
 	elif suggestion_index >= current_suggestions.size():
 		suggestion_index = 0
-	
+
 	suggestion_applied = false
 	update_suggestion_ui()
 
@@ -196,21 +196,21 @@ func text_changed(new_text: String):
 func handle_tab_completion():
 	if current_suggestions.is_empty():
 		return
-	
+
 	if suggestion_index == -1:
 		suggestion_index = 0
 	elif suggestion_applied:
 		suggestion_index = (suggestion_index + 1) % current_suggestions.size()
-	
+
 	is_completing = true
-	
+
 	var selected_cmd = current_suggestions[suggestion_index]
 	input_field.text = selected_cmd
 	input_field.caret_column = selected_cmd.length()
-	
+
 	is_completing = false
 	suggestion_applied = true
-	
+
 	update_suggestion_ui()
 
 func update_suggestion_ui():
@@ -224,7 +224,7 @@ func update_suggestion_ui():
 			suggestion_text.append("[color=yellow]%s[/color]\n" % cmd)
 		else:
 			suggestion_text.append("[color=gray]%s[/color]\n" % cmd)
-	
+
 	suggestion_label.text = "".join(suggestion_text)
 	suggestion_panel.show()
 
@@ -240,20 +240,20 @@ func add_message(text: String):
 		var oldest = message_container.get_child(0)
 		message_container.remove_child(oldest)
 		oldest.queue_free()
-	
+
 	var label := RichTextLabel.new()
 	label.bbcode_enabled = true
 	label.fit_content = true
 	label.scroll_active = false
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.text = text
-	
+
 	var birth_time_sec = Time.get_ticks_msec() / 1000.0
 	label.set_meta("birth_time", birth_time_sec)
-	
+
 	message_container.add_child(label)
 	scroll_to_bottom()
-	
+
 	if not is_open:
 		schedule_message_fade(label, birth_time_sec)
 
@@ -262,12 +262,12 @@ func schedule_message_fade(label: Control, current_time_sec: float):
 		var old_tween: Tween = label.get_meta("tween")
 		if old_tween and old_tween.is_valid():
 			old_tween.kill()
-	
+
 	var birth_time: float = label.get_meta("birth_time", current_time_sec)
 	var age: float = current_time_sec - birth_time
 	var remaining_stay: float = max(0.0, message_stay_time-age)
-	
-	
+
+
 	if remaining_stay > 0.0:
 		var tween = create_tween()
 		label.set_meta("tween", tween)

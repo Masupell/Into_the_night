@@ -66,18 +66,18 @@ var is_typing: bool = false
 
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	
+
 	spring_arm.spring_length = camera_distance
 	spring_arm.add_excluded_object(get_rid())
 	camera.position = Vector3.ZERO
-	
+
 	pivot.top_level = true
-	
+
 	left_aileron_rest = left_aileron.rotation
 	right_aileron_rest = right_aileron.rotation
 	elevator_rest = elevator.rotation
 	rudder_rest = rudder.rotation
-	
+
 	if console:
 		console.console_toggled.connect(func(open: bool): is_typing = open)
 
@@ -85,14 +85,14 @@ func _ready():
 func _physics_process(delta: float) -> void:
 	if not planet:
 		return
-	
+
 	var true_pos = global_position - planet.global_position #planet.get_true_position() -> Only works if plane is active
 	if true_pos.length_squared() < 0.001:
 		return
 	var planet_up = true_pos.normalized()
 	up_direction = planet_up
 	var forward = global_transform.basis.z
-	
+
 	var thrust_input := 0.0
 	var pitch_input := 0.0
 	var roll_input := 0.0
@@ -102,22 +102,22 @@ func _physics_process(delta: float) -> void:
 			thrust_input += 1.0
 		if Input.is_key_pressed(KEY_CTRL):
 			thrust_input -= 2.0
-		
+
 		if Input.is_key_pressed(KEY_S): pitch_input -= 1.0 # Pull up
 		if Input.is_key_pressed(KEY_W): pitch_input += 1.0 # Pull down
-		
+
 		if Input.is_key_pressed(KEY_A): roll_input += 1.0 # Bank left
 		if Input.is_key_pressed(KEY_D): roll_input -= 1.0 # Bank right
-		
+
 		if Input.is_key_pressed(KEY_E): yaw_input += 1.0 # Right
 		if Input.is_key_pressed(KEY_Q): yaw_input -= 1.0 # Left
-	
+
 	move_speed = clamp(move_speed + thrust_input * acceleration * delta, 0.0, max_speed)
 	velocity = (forward * move_speed) + (-planet_up * fall_speed)
-	
+
 	if is_on_floor():
 		fall_speed = 0.0
-		
+
 		var floor_normal = get_floor_normal()
 		if basis.y.dot(floor_normal) > 0.2: # Only align, when it is roughly straight (later explode otherwise)
 			var correction = basis.y.cross(floor_normal)
@@ -127,19 +127,19 @@ func _physics_process(delta: float) -> void:
 		var lift_factor = clamp((move_speed / stall_speed) * lift_efficiency, 0.0, 1.0)
 		var upright_factor = basis.y.dot(planet_up) # 1.0 = upright, -1.0 = upside down
 		var effective_lift = lift_factor * upright_factor
-		
+
 		#Gravity
 		var target_fall_speed = max_fall_speed * (1.0 - effective_lift)
 		var adjustment_rate = gravity * (1.0 + lift_factor)
 		fall_speed = move_toward(fall_speed, target_fall_speed, adjustment_rate * delta)
-		
+
 		#Air alignment
 		if velocity.length_squared() > 1.0 and pitch_input == 0.0 and roll_input == 0.0:
 			var travel_dir = velocity.normalized()
 			var air_correction = forward.cross(travel_dir)
 			if air_correction.length_squared() > 0.001:
 				rotate(air_correction.normalized(), air_correction.length() * air_align_speed * delta)
-	
+
 	if pitch_input != 0.0:
 		rotate_object_local(Vector3.RIGHT, pitch_input * pitch_speed * delta)
 	if not is_on_floor() and roll_input != 0.0:
@@ -147,26 +147,26 @@ func _physics_process(delta: float) -> void:
 	if yaw_input != 0.0:
 		rotate_object_local(Vector3.UP, -yaw_input * yaw_speed * delta)
 	global_transform.basis = global_transform.basis.orthonormalized()
-	
+
 	move_and_slide()
-	
-	
+
+
 	if planet.camera_mode == 1 and global_position != Vector3.ZERO:
 		planet.shift_origin(global_position)
 		global_position = Vector3.ZERO
 	true_pos = global_position - planet.global_position #planet.get_true_position()
-	
-	
+
+
 	#Animation
 	var speed_percent = move_speed / max_speed
 	rotor_speed = ease(speed_percent, 0.5) * max_rotor_speed#lerp(0.0, max_rotor_speed, speed_percent)
-	
+
 	propellor.rotate_z(rotor_speed * TAU * delta)
-	
+
 	animation_pitch = move_toward(animation_pitch, pitch_input, CONTROL_SPEED * delta)
 	animation_roll = move_toward(animation_roll, roll_input, CONTROL_SPEED * delta)
 	animation_yaw = move_toward(animation_yaw, yaw_input, CONTROL_SPEED * delta)
-	
+
 	left_aileron.rotation.x = lerp_angle(
 		left_aileron.rotation.x,
 		left_aileron_rest.x + deg_to_rad(20.0 * animation_roll),
@@ -190,10 +190,10 @@ func _physics_process(delta: float) -> void:
 		rudder_rest.y + deg_to_rad(8.0 * animation_yaw),
 		delta * 10.0
 	)
-	
-	
+
+
 	# -- HUD -- #
-	
+
 	# Raycast for above ground height measure
 	var space_state = get_world_3d().direct_space_state
 	var query = PhysicsRayQueryParameters3D.create(global_position, global_position - planet_up * planet_radius)
@@ -202,20 +202,20 @@ func _physics_process(delta: float) -> void:
 	var current_agl: float = -1.0
 	if result:
 		current_agl =global_position.distance_to(result.position)
-	
-	
+
+
 	var world_north_pole = Vector3.DOWN # 'DOWN' Works better here, dont have to reverse sun rotation or planet generation
-	
+
 	#Compass
 	var surface_north = world_north_pole.slide(planet_up).normalized()
 	if surface_north.length_squared() < 0.001:
 		surface_north = Vector3.FORWARD.slide(planet_up).normalized()
 	var surface_east = planet_up.cross(surface_north).normalized()
 	var heading_forward = forward.slide(planet_up).normalized()
-	
+
 	var heading_rad = atan2(heading_forward.dot(surface_east), heading_forward.dot(surface_north))
 	var heading_deg = wrapf(360.0 - rad_to_deg(heading_rad), 0.0, 360.0) #subtract value from 360, so it lines up with real life, clockwise rotation increases degree
-	
+
 	#Time
 	var current_time_hours: float = 0.0
 	if planet.sun:
@@ -227,7 +227,7 @@ func _physics_process(delta: float) -> void:
 		var angle_rad = atan2(plane_sun_cross.dot(world_north_pole), plane_sun_dot)
 		# Map angle to 24h time
 		current_time_hours = wrapf(12.0 + (angle_rad / TAU * 24.0), 0.0, 24.0)
-	
+
 	# Hud
 	if hud:
 		var power = move_speed/max_speed
@@ -238,8 +238,8 @@ func _physics_process(delta: float) -> void:
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))
 		var roll_deg = rad_to_deg(roll_rad)
 		hud.update_metrics(power, current_speed, heading_deg, current_amsl, current_agl, pitch_deg, roll_deg, current_time_hours)
-	
-	
+
+
 	#Camera movement around Plane
 	pivot.global_position = global_position
 
@@ -251,27 +251,27 @@ func _physics_process(delta: float) -> void:
 	var level_fwd = planet_up.cross(right).normalized()
 	var clean_horizon = Basis(right, planet_up, -level_fwd)
 	var pitch_rot = Quaternion(right, current_pitch)
-	
+
 	pivot.global_transform.basis = Basis(pitch_rot) * clean_horizon
 	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var current_up = planet.get_true_position().normalized()
-		
+
 		var yaw_delta = -event.relative.x * camera_sensitivity
 		pivot.global_transform.basis = pivot.global_transform.basis.rotated(current_up, yaw_delta)
-		
+
 		var forward = -pivot.global_transform.basis.z
 		var current_pitch = asin(clamp(forward.dot(current_up), -1.0, 1.0))
-		
+
 		var target_pitch = clamp(current_pitch - event.relative.y * camera_sensitivity, min_pitch, max_pitch)
 		var pitch_delta = target_pitch - current_pitch
-		
+
 		var local_x = pivot.global_transform.basis.x
 		pivot.global_transform.basis = pivot.global_transform.basis.rotated(local_x, pitch_delta)
-	
-	
+
+
 	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

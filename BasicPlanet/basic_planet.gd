@@ -58,10 +58,10 @@ func create_sphere(sphere_radius: float, sphere_detail: int) -> Array:
 	var sphere = SphereMesh.new()
 	sphere.radius = sphere_radius
 	sphere.height = sphere_radius*2.0
-	
+
 	sphere.radial_segments = sphere_detail * 2
 	sphere.rings = sphere_detail
-	
+
 	return sphere.get_mesh_arrays()
 
 func get_noise(vertex: Vector3) -> float:
@@ -70,18 +70,18 @@ func get_noise(vertex: Vector3) -> float:
 func update_terrain():
 	if !terrain or !noise:
 		return
-	
+
 	var mesh_arrays = create_sphere(radius, detail)
 	var vertices: PackedVector3Array = mesh_arrays[ArrayMesh.ARRAY_VERTEX]
 	for i: int in vertices.size():
 		var vertex := vertices[i]
 		vertex += vertex.normalized() * get_noise(vertex)
 		vertices[i] = vertex
-	
+
 	terrain.clear_surfaces()
 	terrain.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
 	terrain.surface_set_material(0, terrain_material)
-	
+
 	terrain_material.set_shader_parameter("radius", radius)
 	terrain_material.set_shader_parameter("height", height)
 
@@ -97,6 +97,6 @@ func update_water():
 	water.clear_surfaces()
 	water.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
 	water.surface_set_material(0, water_material)
-	
+
 	water_material.set_shader_parameter("radius", radius)
 	water_material.set_shader_parameter("level", radius + (height * water_level))

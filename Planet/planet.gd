@@ -220,15 +220,6 @@ static func spherify(p: Vector3) -> Vector3:
 	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 	return res
 
-static func get_uv_from_vector(pos: Vector3) -> Vector2:
-	var n = pos.normalized()
-	var phi = atan2(n.z, n.x)
-	var theta = asin(n.y)
-	
-	var u = (phi + PI) / (2.0 * PI)
-	var v = (theta + PI / 2.0) / PI
-	return Vector2(u, v)
-
 func world_from_texture():
 	terrain_data = TerrainData.new(2048, 2048)
 	var image = load("res://Planet/earth_map.png").get_image()

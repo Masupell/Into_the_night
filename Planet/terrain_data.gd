@@ -18,6 +18,21 @@ func set_height(x: int, y: int, value: float):
 	height_map[x + y * width] = value
 
 
+# Height (0..1) at a direction on the sphere, so callers don't need to know how the data is stored
+func sample(dir: Vector3) -> float:
+	return sample_bilinear(get_uv_from_vector(dir))
+
+# Equirectangular projection, specific to how this data is stored
+static func get_uv_from_vector(pos: Vector3) -> Vector2:
+	var n = pos.normalized()
+	var phi = atan2(n.z, n.x)
+	var theta = asin(n.y)
+
+	var u = (phi + PI) / (2.0 * PI)
+	var v = (theta + PI / 2.0) / PI
+	return Vector2(u, v)
+
+
 func sample_bilinear(uv: Vector2) -> float:
 	var x = uv.x * (width - 1)
 	var y = uv.y * (height - 1)
