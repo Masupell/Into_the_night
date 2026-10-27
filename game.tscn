@@ -13,6 +13,15 @@ radius = 1.5
 [node name="Game" type="Node3D" unique_id=1528733142]
 
 [node name="Planet" parent="." unique_id=262084446 node_paths=PackedStringArray("command_processor", "plane", "free_cam", "flight_hud", "canvas_layer") instance=ExtResource("1_ryrav")]
+planet_seed = null
+radius = null
+max_height = null
+max_lod_level = null
+grid_size = null
+terrain_face_size = null
+lod_threshold_deg = null
+real_seconds_per_game_minute = null
+orbit_distance = null
 command_processor = NodePath("../CommandProcessor")
 plane = NodePath("../Plane")
 free_cam = NodePath("../Camera")

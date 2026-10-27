@@ -14,7 +14,8 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
-@export var terrain_face_size: int = 512 # Pixels per cube face edge, 512 because of 2048 wide earth map at equator, rougly
+@export var terrain_tiles_per_face: int = 4
+@export var terrain_tile_size: int = 129 # Pixels per tile edge, 4 * 128 + 1 = 513 per face, roughly the 2048 wide earth map at the equator
 
 @onready var chunk_container: Node3D = Node3D.new()
 var free_chunks: Array[Chunk] = []
@@ -201,7 +202,7 @@ func seed_origin_from(world_pos: Vector3):
 	global_position = -get_true_position()
 
 func world_from_texture():
-	terrain_data = TerrainData.new(terrain_face_size)
+	terrain_data = TerrainData.new(terrain_tiles_per_face, terrain_tile_size)
 	var image = load("res://Planet/earth_map.png").get_image()
 	terrain_data.load_from_equirect(image)
 	world_texture = ImageTexture.create_from_image(image)
@@ -210,7 +211,7 @@ func world_from_texture():
 
 func generate_world_texture():
 	#world_image = Image.create(2048, 2048, false, Image.FORMAT_RGBA8)
-	terrain_data = TerrainData.new(terrain_face_size)
+	terrain_data = TerrainData.new(terrain_tiles_per_face, terrain_tile_size)
 
 	var continent_noise = FastNoiseLite.new()
 	continent_noise.seed = planet_seed
@@ -230,8 +231,8 @@ func generate_world_texture():
 	mountain_noise.fractal_gain = 0.6
 
 	for face in range(6):
-		for y in range(terrain_face_size):
-			for x in range(terrain_face_size):
+		for y in range(terrain_data.face_size):
+			for x in range(terrain_data.face_size):
 				var sphere_point = terrain_data.pixel_to_dir(face, x, y) * 150.0
 				var continent_value = (continent_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
 
