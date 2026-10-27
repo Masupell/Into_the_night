@@ -205,7 +205,7 @@ func seed_origin_from(world_pos: Vector3):
 
 func world_from_texture():
 	var image = load("res://Planet/earth_map.png").get_image()
-	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EquirectSource.new(image))
+	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EquirectSource.new(image, 0.08)) # 0.08 is roughly the sea in this map
 	world_texture = ImageTexture.create_from_image(image)
 
 func generate_world_texture():

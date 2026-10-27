@@ -24,7 +24,7 @@ uniform vec3 snow_color: source_color = vec3(1.0);
 
 void vertex()
 {
-    v_height = COLOR.r;
+    v_height = UV2.x; // height relative to sea level (0), 1 = max_height
 	v_world_pos = VERTEX;
 }
 
@@ -43,10 +43,11 @@ void fragment()
     //float to_dark_grass = smoothstep(0.55, 0.58, v_height);
     //float to_rock = smoothstep(0.70, 0.74, v_height);
     //float to_snow = smoothstep(0.84, 0.86, v_height);
-	float to_grass = smoothstep(0.07, 0.1, v_height);
-    float to_dark_grass = smoothstep(0.16, 0.18, v_height);
-    float to_rock = smoothstep(0.26, 0.28, v_height);
-    float to_snow = smoothstep(0.45, 0.47, v_height);
+	// same bands as before, moved down by the old earth map sea level (0.08)
+	float to_grass = smoothstep(-0.01, 0.02, v_height);
+    float to_dark_grass = smoothstep(0.08, 0.10, v_height);
+    float to_rock = smoothstep(0.18, 0.20, v_height);
+    float to_snow = smoothstep(0.37, 0.39, v_height);
 
 	vec3 final_albedo = seabed_color;
     final_albedo = mix(final_albedo, grass_color, to_grass);

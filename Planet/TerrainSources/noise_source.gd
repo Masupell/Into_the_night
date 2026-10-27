@@ -2,7 +2,8 @@ class_name NoiseSource
 extends TerrainSource
 
 # Procedural continents and mountains from a seed
-const COAST_HEIGHT := 0.40
+const COAST_HEIGHT := 0.40 # becomes sea level (0)
+const OCEAN_DEPTH := 0.08 # deepest ocean after remapping, same as the old earth map
 
 var continent_noise := FastNoiseLite.new()
 var mountain_noise := FastNoiseLite.new()
@@ -48,8 +49,8 @@ func height_at(dir: Vector3) -> float:
 	final_height = clamp(final_height, 0.0, 1.0)
 	return remap_to_sea_level(final_height)
 
-# Moves the coast from COAST_HEIGHT to TerrainData.SEA_LEVEL, ocean and land are each stretched linearly
+# Moves the coast from COAST_HEIGHT to 0, ocean becomes -OCEAN_DEPTH..0 and land 0..1
 static func remap_to_sea_level(h: float) -> float:
 	if h < COAST_HEIGHT:
-		return h / COAST_HEIGHT * TerrainData.SEA_LEVEL
-	return TerrainData.SEA_LEVEL + (h - COAST_HEIGHT) / (1.0 - COAST_HEIGHT) * (1.0 - TerrainData.SEA_LEVEL)
+		return (h / COAST_HEIGHT - 1.0) * OCEAN_DEPTH
+	return (h - COAST_HEIGHT) / (1.0 - COAST_HEIGHT)

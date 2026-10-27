@@ -2,12 +2,13 @@ class_name EquirectSource
 extends TerrainSource
 
 # Equirectangular heightmap (red channel right now), like the earth map
-# The earth map already has its sea level at about TerrainData.SEA_LEVEL, so no remapping
 var data: PackedFloat32Array
 var width: int
 var height: int
+var sea_level: float # value in the image that is sea level, gets subtracted
 
-func _init(source: Image) -> void:
+func _init(source: Image, _sea_level: float) -> void:
+	sea_level = _sea_level
 	var img := source.duplicate() as Image
 	img.convert(Image.FORMAT_RF)
 	data = img.get_data().to_float32_array()
@@ -15,7 +16,7 @@ func _init(source: Image) -> void:
 	height = img.get_height()
 
 func height_at(dir: Vector3) -> float:
-	return sample(get_uv(dir))
+	return sample(get_uv(dir)) - sea_level
 
 # Equirectangular projection (Vector3.DOWN is the north pole)
 static func get_uv(pos: Vector3) -> Vector2:

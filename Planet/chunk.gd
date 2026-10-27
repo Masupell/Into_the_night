@@ -129,19 +129,19 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var vertices = PackedVector3Array()
 	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
-	var colors = PackedColorArray()
+	var heights = PackedVector2Array() # terrain height for the shader in x (UV2), float, so it can be negative
 	var uvs = PackedVector2Array()
 
 	vertices.resize(total_vertices_all)
 	indices.resize(total_index_count)
 	normals.resize(total_vertices_all)
-	colors.resize(total_vertices_all)
+	heights.resize(total_vertices_all)
 	uvs.resize(total_vertices_all)
 
 	var sphere_points_cache = PackedVector3Array()
 	sphere_points_cache.resize(total_vertices)
 
-	var min_chunk_height := 1.0
+	var min_chunk_height := INF
 
 	for y in range(num_vertices):
 		for x in range(num_vertices):
@@ -172,8 +172,8 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			var small_detail = detail_noise.get_noise_3dv(sphere_point * 700.0)
 
 			var detail = large_detail * 4.0 + medium_detail * 1.5 + small_detail * 0.4
-			var land = smoothstep(0.45, 0.5, macro_height_ratio)
-			var mountain_factor = smoothstep(0.55, 0.8, macro_height_ratio)
+			var land = smoothstep(0.0, 0.05, macro_height_ratio) # no detail below sea level
+			var mountain_factor = smoothstep(0.25, 0.67, macro_height_ratio)
 			var detail_strength = lerp(1.0, 6.0, mountain_factor)
 
 			macro_height += detail * detail_strength * land
@@ -183,7 +183,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 			vertices[idx] = vertex_pos
 			normals[idx] = sphere_point.normalized()
-			colors[idx] = Color(macro_height_ratio, 0.0, 0.0)
+			heights[idx] = Vector2(macro_height_ratio, 0.0)
 
 	var edges_to_stitch: Array[PackedInt32Array] = []
 
@@ -219,7 +219,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 			vertices[curr_idx] = vertices[prev_idx].lerp(vertices[next_idx], 0.5)
 			normals[curr_idx] = (normals[prev_idx] + normals[next_idx]).normalized()
-			colors[curr_idx] = colors[prev_idx].lerp(colors[next_idx], 0.5)
+			heights[curr_idx] = heights[prev_idx].lerp(heights[next_idx], 0.5)
 
 	for y in range(grid_size):
 		for x in range(grid_size):
@@ -250,7 +250,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		var s_idx = north_offset + x
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
-		colors[s_idx] = colors[src_idx]
+		heights[s_idx] = heights[src_idx]
 		uvs[s_idx] = uvs[src_idx]
 
 	for x in range(num_vertices):
@@ -258,7 +258,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		var s_idx = south_offset + x
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
-		colors[s_idx] = colors[src_idx]
+		heights[s_idx] = heights[src_idx]
 		uvs[s_idx] = uvs[src_idx]
 
 	for y in range(num_vertices):
@@ -266,7 +266,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		var s_idx = west_offset + y
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
-		colors[s_idx] = colors[src_idx]
+		heights[s_idx] = heights[src_idx]
 		uvs[s_idx] = uvs[src_idx]
 
 	for y in range(num_vertices):
@@ -274,7 +274,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		var s_idx = east_offset + y
 		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
-		colors[s_idx] = colors[src_idx]
+		heights[s_idx] = heights[src_idx]
 		uvs[s_idx] = uvs[src_idx]
 
 	var idx_ptr = main_index_count
@@ -335,18 +335,19 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
-	mesh_array[Mesh.ARRAY_COLOR] = colors
+	mesh_array[Mesh.ARRAY_TEX_UV2] = heights
 	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
 
-	var water_data = calculate_water_mesh(grid_size, radius, height, min_chunk_height, TerrainData.SEA_LEVEL, sphere_points_cache)
+	var water_data = calculate_water_mesh(grid_size, radius, min_chunk_height, sphere_points_cache)
 
 	return {
 		"mesh_array": mesh_array,
 		"water_data": water_data
 	}
 
-static func calculate_water_mesh(grid_size: int, radius: float, height: float, min_terrain_height: float, sea_level_ratio: float, sphere_points_cache: PackedVector3Array) -> Dictionary:
-	if min_terrain_height > (sea_level_ratio + 0.1):
+# Sea level is height 0, so the water is just a sphere at the planet radius
+static func calculate_water_mesh(grid_size: int, radius: float, min_terrain_height: float, sphere_points_cache: PackedVector3Array) -> Dictionary:
+	if min_terrain_height > 0.1:
 		return { "should_render": false }
 
 	var mesh_array = []
@@ -365,7 +366,7 @@ static func calculate_water_mesh(grid_size: int, radius: float, height: float, m
 	uvs.resize(total_vertices)
 	indices.resize(grid_size * grid_size * 6)
 
-	var water_radisu = radius + (sea_level_ratio * height)
+	var water_radisu = radius
 
 	for y in range(num_vertices):
 		for x in range(num_vertices):

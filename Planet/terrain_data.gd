@@ -15,7 +15,6 @@ var tile_size: int # pixels per tile edge
 var tiles_per_face: int # per edge at max_level
 var face_size: int # pixels per edge at max_level
 
-const SEA_LEVEL := 0.08 # height (0..1) of the water surface
 const UNLOAD_AFTER_MSEC := 10000
 
 var tiles: Dictionary = {} # Vector4i(face, level, tile_x, tile_y) -> TerrainTile, only finished tiles
