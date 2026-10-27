@@ -78,6 +78,10 @@ func _process(delta):
 			planet.shift_origin(global_position)
 			global_position = Vector3.ZERO
 
+	# Fast enough to go through the ground in one frame (or no collider there yet), so push back out
+	if active:
+		planet.keep_above_ground(2.0)
+
 	if Input.is_key_pressed(KEY_TAB):
 		print(global_position)
 

@@ -16,7 +16,8 @@ const FRUSTUM_INTERSECT = 1
 const FRUSTUM_INSIDE = 2
 
 var frustum_state = FRUSTUM_INTERSECT
-var bounding_aabb: AABB
+var bounding_aabb: AABB # sea level up to max_height, for culling while the camera is above water
+var bounding_aabb_deep: AABB # also down to the ocean floor, for culling under water and for colliders
 var bounding_center: Vector3
 var horizon_cos_alpha: float
 var horizon_sin_alpha: float
@@ -43,7 +44,8 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 	if parent_quad and parent_quad.frustum_state == FRUSTUM_INSIDE:
 		frustum_state = FRUSTUM_INSIDE
 	elif not frustum_planes.is_empty():
-		frustum_state = test_frustum(frustum_planes)
+		var under_water: bool = camera_pos.length() < planet.radius
+		frustum_state = test_frustum(frustum_planes, bounding_aabb_deep if under_water else bounding_aabb)
 	else:
 		frustum_state = FRUSTUM_INTERSECT
 
@@ -89,11 +91,11 @@ func are_children_ready() -> bool:
 			return false
 	return true
 
-func test_frustum(frustum_planes: Array) -> int:
+func test_frustum(frustum_planes: Array, aabb: AABB) -> int:
 	var fully_inside_count := 0
-	var aabb_min = bounding_aabb.position
-	var aabb_max = bounding_aabb.end
-	var margin: float = bounding_aabb.size.length() * 0.15
+	var aabb_min = aabb.position
+	var aabb_max = aabb.end
+	var margin: float = aabb.size.length() * 0.15
 
 	for plane in frustum_planes:
 		var n_vertex = Vector3(
@@ -118,7 +120,11 @@ func test_frustum(frustum_planes: Array) -> int:
 
 func is_above_horizon(camera_pos: Vector3) -> bool:
 	var camera_distance: float = camera_pos.length()
-	if camera_distance <= planet.radius:
+	# Above water the (opaque when deep) sea surface hides everything below the horizon,
+	# under water only the lowest ground (ocean floor) can
+	@warning_ignore("incompatible_ternary")
+	var occluder_radius: float = planet.radius if camera_distance > planet.radius else planet.min_terrain_radius
+	if camera_distance <= occluder_radius:
 		return true
 
 	var camera_dir: Vector3 = camera_pos / camera_distance
@@ -128,9 +134,9 @@ func is_above_horizon(camera_pos: Vector3) -> bool:
 	if cos_angle_to_chunk >= horizon_cos_alpha:
 		return true
 
-	var cos_camera_horizon: float = planet.radius / camera_distance
+	var cos_camera_horizon: float = occluder_radius / camera_distance
 	var sin_camera_horizon: float = sqrt(maxf(0.0, 1.0 - cos_camera_horizon * cos_camera_horizon))
-	var cos_terrain_extend: float = planet.radius / (planet.radius + planet.max_height)
+	var cos_terrain_extend: float = occluder_radius / (planet.radius + planet.max_height)
 	var sin_terrain_extend: float = sqrt(maxf(0.0, 1.0 - cos_terrain_extend * cos_terrain_extend))
 
 	var cos_total_horizon: float = cos_camera_horizon * cos_terrain_extend - sin_camera_horizon * sin_terrain_extend
@@ -286,8 +292,10 @@ func draw_chunk():
 	var stitch_e = e_nb != null and e_nb.level < level
 	var stitch_w = w_nb != null and w_nb.level < level
 
-	var dist_to_player = bounding_center.distance_squared_to(planet.get_true_position())
-	var needs_collision = dist_to_player < 90000.0
+	# distance to the bounds, not a point above sea level, so deep ocean floor chunks get colliders too
+	var player_pos := planet.get_true_position()
+	var dist_to_player := player_pos.distance_squared_to(player_pos.clamp(bounding_aabb_deep.position, bounding_aabb_deep.end))
+	var needs_collision := dist_to_player < 90000.0
 
 	#if level > highest_lod:
 		#highest_lod = level
@@ -336,6 +344,8 @@ func calculate_bounds():
 
 	var min_v = Vector3(INF, INF, INF)
 	var max_v = Vector3(-INF, -INF, -INF)
+	var deep_min = Vector3(INF, INF, INF)
+	var deep_max = Vector3(-INF, -INF, -INF)
 
 	var points = corners.duplicate()
 	points.append(mid_point)
@@ -349,6 +359,10 @@ func calculate_bounds():
 		var s = CubeSphere.spherify(p)
 		var surface = s * planet.radius
 		var mountains = s * (planet.radius + planet.max_height)
+		var ocean_floor = s * planet.min_terrain_radius
 		min_v = min_v.min(surface).min(mountains)
 		max_v = max_v.max(surface).max(mountains)
+		deep_min = deep_min.min(min_v).min(ocean_floor)
+		deep_max = deep_max.max(max_v).max(ocean_floor)
 	bounding_aabb = (AABB(min_v, max_v - min_v)).grow(5.0) # grow, to give a bit of a buffer around the screen edges
+	bounding_aabb_deep = (AABB(deep_min, deep_max - deep_min)).grow(5.0)

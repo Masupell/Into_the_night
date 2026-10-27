@@ -5,6 +5,7 @@ extends Node3D
 
 @export var radius := 63710#5000.0
 @export var start_altitude := 70000.0
+@export var max_depth_ratio: float = 1.25 # deepest ocean floor below sea level, times max_height (ETOPO: 10752 / 8849 = 1.22)
 @export var max_height: float = 442.4#88.48#200.0#500.0
 @export var atmosphere_radius: float = radius+5000.0
 
@@ -53,6 +54,7 @@ var water_material: ShaderMaterial
 
 var world_commands: WorldCommands
 
+var min_terrain_radius: float # lowest possible ground (ocean floor), set in _ready
 var edge_length: float # set in _ready, an initializer here would still use the default radius, not the one from the scene
 
 @export var plane: AirPlane
@@ -71,6 +73,7 @@ func _ready() -> void:
 		#print(level, ": ", chunk_world_size)
 
 	edge_length = (radius * 2.0) / sqrt(3.0)
+	min_terrain_radius = radius - max_depth_ratio * max_height
 	orbit_distance = radius * orbit_distance_factor
 
 	# Has to see the whole planet from a bit further out, 100km was enough for 5km radius
@@ -209,6 +212,27 @@ func shift_origin(moved_by: Vector3):
 	# temprorary for plane
 	if camera_mode != 1 and plane:
 		plane.global_position -= moved_by
+
+# Meters above the radius of the ground under dir, from the finest loaded tile (without loading anything)
+# Ocean floor depth if nothing is loaded there yet, so it is never above the real ground
+func ground_height_at(dir: Vector3) -> float:
+	var face := CubeSphere.get_face(dir)
+	var h := terrain_data.sample_loaded(face, CubeSphere.get_face_uv(dir, face))
+	if is_nan(h):
+		return min_terrain_radius - radius
+	return Chunk.surface_height(detail_noise, dir.normalized(), h, max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)
+
+# If the active controller (free cam / plane) ended up below the ground (too fast for its collision, or no collider yet),
+# push it back out along the up direction, clearance meters above the ground. Returns true if it had to
+func keep_above_ground(clearance: float) -> bool:
+	var pos := get_true_position()
+	var dist := pos.length()
+	var dir := pos / dist if dist > 1.0 else Vector3.UP # at the very center there is no up, pick any
+	var ground := radius + ground_height_at(dir)
+	if dist >= ground:
+		return false
+	shift_origin(dir * (ground + clearance) - pos)
+	return true
 
 # At start of game and after potential teleports
 func seed_origin_from(world_pos: Vector3):

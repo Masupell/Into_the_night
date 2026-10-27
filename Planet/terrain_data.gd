@@ -73,6 +73,16 @@ func get_sampler(face: int, quad_level: int, grid_cells: int, uv_center: Vector2
 	last_used[key] = Time.get_ticks_msec()
 	return TerrainSampler.new(tiles[key])
 
+# Height at a face uv from the finest tile that is already loaded, NAN if none is.
+# For ground checks, doesn't request anything
+func sample_loaded(face: int, uv: Vector2) -> float:
+	for level in range(max_level, -1, -1):
+		var count := 1 << level
+		var key := Vector4i(face, level, mini(int(uv.x * count), count - 1), mini(int(uv.y * count), count - 1))
+		if tiles.has(key):
+			return TerrainSampler.new(tiles[key]).sample(uv)
+	return NAN
+
 func get_tile(face: int, level: int, tile_x: int, tile_y: int) -> TerrainTile:
 	return tiles.get(Vector4i(face, level, tile_x, tile_y))
 

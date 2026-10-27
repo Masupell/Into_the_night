@@ -153,6 +153,8 @@ func _physics_process(delta: float) -> void:
 	if planet.camera_mode == 1 and global_position != Vector3.ZERO:
 		planet.shift_origin(global_position)
 		global_position = Vector3.ZERO
+	if planet.camera_mode == 1 and planet.keep_above_ground(2.0): # safety net, collision should normally stop it
+		fall_speed = 0.0
 	true_pos = global_position - planet.global_position #planet.get_true_position()
 
 
@@ -256,6 +258,8 @@ func _physics_process(delta: float) -> void:
 
 func _input(event):
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if planet.get_true_position().length_squared() < 1.0:
+			return # at the planet center there is no up, the rotations below would fail
 		var current_up = planet.get_true_position().normalized()
 
 		var yaw_delta = -event.relative.x * camera_sensitivity
