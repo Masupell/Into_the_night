@@ -224,9 +224,17 @@ func ensure_neighbors_within_one_level():
 
 func merge():
 	for child in children:
-		child.remove_chunk()
+		child.remove_subtree()
 	children.clear()
 	refresh_neighbors()
+
+# Moving away fast can merge a quad whose children are still split, so the whole subtree has to go,
+# otherwise the deeper chunks are never recycled and stay visible forever
+func remove_subtree():
+	remove_chunk()
+	for child in children:
+		child.remove_subtree()
+	children.clear()
 
 func remove_chunk():
 	if chunk:
