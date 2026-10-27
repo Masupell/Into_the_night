@@ -330,7 +330,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 	mesh_array[Mesh.ARRAY_COLOR] = colors
 	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
 
-	var water_data = calculate_water_mesh(grid_size, radius, height, min_chunk_height, 0.08, sphere_points_cache)
+	var water_data = calculate_water_mesh(grid_size, radius, height, min_chunk_height, TerrainData.SEA_LEVEL, sphere_points_cache)
 
 	return {
 		"mesh_array": mesh_array,
