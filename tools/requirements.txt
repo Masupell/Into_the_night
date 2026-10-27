@@ -1,0 +1,3 @@
+numpy
+tifffile
+imagecodecs # the ETOPO GeoTIFF uses deflate with a floating point predictor

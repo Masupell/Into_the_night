@@ -1,0 +1,1 @@
+python3 -m venv tools/.venv && tools/.venv/bin/pip install -r tools/requirements.txt

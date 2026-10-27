@@ -5,3 +5,8 @@
 *.import
 /test
 /.zed*
+
+# Elevation data, downloaded/converted with tools/ (too big for git)
+/data/source
+/data/*.bin
+/tools/.venv
