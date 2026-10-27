@@ -4,6 +4,9 @@ extends RefCounted
 var planet: Planet
 var level: int = 0 # Depth of quadtree
 var corners: Array
+var face: int # cube face, same for the whole tree
+var uv_min: Vector2 # uv rectangle on the face, top left / bottom right corner
+var uv_max: Vector2
 var children: Array[Quad] = []
 var chunk: Chunk = null
 
@@ -24,12 +27,15 @@ var quad_type: Type = Type.ROOT
 
 #var highest_lod: int = 0
 
-func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, _type: Type = Type.ROOT) -> void:
+func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, _type: Type = Type.ROOT, _face: int = -1) -> void:
 	self.planet = _planet
 	self.level = _level
 	self.corners = _corners
 	self.parent_quad = _parent
 	self.quad_type = _type
+	self.face = _parent.face if _parent else _face
+	self.uv_min = CubeSphere.cube_to_face_uv(face, corners[0])
+	self.uv_max = CubeSphere.cube_to_face_uv(face, corners[2])
 	calculate_bounds()
 
 func update_lod(camera_pos: Vector3, frustum_planes: Array):
@@ -243,6 +249,7 @@ func draw_chunk():
 	if chunk == null:
 		chunk = planet.request_chunk()
 		chunk.visible = false
+		chunk.planet = planet # before the tile check, a waiting chunk can get recycled too
 
 	if chunk.active_task_id != -1:
 		chunk.redraw_requested = true
@@ -250,6 +257,12 @@ func draw_chunk():
 		return
 
 	chunk.owner_quad = self
+
+	var sampler := planet.terrain_data.get_sampler(face, uv_min, uv_max)
+	if sampler == null: # tiles are loading, chunk retries next frame and keeps its old mesh until then
+		chunk.waiting_for_tiles = true
+		return
+
 	chunk.generation_id += 1
 
 	var current_grid_size = get_grid_size(level)
@@ -272,8 +285,7 @@ func draw_chunk():
 		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, " ", chunk_world_size)
 
-	chunk.planet = planet
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, planet.terrain_data, corners, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, face, uv_min, uv_max, corners, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 

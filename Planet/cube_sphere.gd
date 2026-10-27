@@ -57,10 +57,15 @@ static func get_face_uv(dir: Vector3, face: int) -> Vector2:
 			var xz := unspherify_pair(s.x, s.z)
 			cube = Vector3(xz.x, c[0].y, xz.y)
 
-	var to_cube: Vector3 = cube - c[0]
-	var u: float = to_cube.dot(c[1] - c[0]) / 4.0 # edges are 2 long, so squared length is 4
-	var v: float = to_cube.dot(c[3] - c[0]) / 4.0
-	return Vector2(clampf(u, 0.0, 1.0), clampf(v, 0.0, 1.0))
+	return cube_to_face_uv(face, cube).clampf(0.0, 1.0)
+
+# Inverse of face_to_cube, for a point on the given face
+static func cube_to_face_uv(face: int, p: Vector3) -> Vector2:
+	var c: Array = FACES[face]
+	var to_p: Vector3 = p - c[0]
+	var u: float = to_p.dot(c[1] - c[0]) / 4.0 # edges are 2 long, so squared length is 4
+	var v: float = to_p.dot(c[3] - c[0]) / 4.0
+	return Vector2(u, v)
 
 # Closed form inverse of spherify for the two free coordinates of a face
 static func unspherify_pair(a: float, b: float) -> Vector2:

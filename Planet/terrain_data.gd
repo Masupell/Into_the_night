@@ -5,13 +5,19 @@ extends RefCounted
 # Pixel 0 and face_size - 1, are exactly on the face borders, neighbouring faces share their values
 # so samples continuous. Tiles share their border pixels the same way, so a face has
 # tiles_per_face * (tile_size - 1) + 1 pixels per edge
+#
+# Tiles are loaded on demand on the WorkerThreadPool and unloaded when nothing used them for a while.
+# Everything in here runs on the main thread only, chunk threads get a TerrainSampler instead
 var tiles_per_face: int
 var tile_size: int # pixels per tile edge
 var face_size: int
 
-const SEA_LEVEL := 0.08 # height (0..1) of the water surface, every TerrainSource is scaled to this
+const SEA_LEVEL := 0.08 # height (0..1) of the water surface
+const UNLOAD_AFTER_MSEC := 10000
 
-var tiles: Dictionary = {} # Vector3i(face, tile_x, tile_y) -> TerrainTile
+var tiles: Dictionary = {} # Vector3i(face, tile_x, tile_y) -> TerrainTile, only finished tiles
+var loading: Dictionary = {} # Vector3i -> [TerrainTile, task_id], the tile is only touched by its task until it is done
+var last_used: Dictionary = {} # Vector3i -> msec
 var source: TerrainSource
 
 func _init(_tiles_per_face: int, _tile_size: int, _source: TerrainSource) -> void:
@@ -20,17 +26,53 @@ func _init(_tiles_per_face: int, _tile_size: int, _source: TerrainSource) -> voi
 	face_size = tiles_per_face * (tile_size - 1) + 1
 	source = _source
 
-	# All tiles up front for now, streaming comes later
-	for face in range(6):
-		for tile_y in range(tiles_per_face):
-			for tile_x in range(tiles_per_face):
-				load_tile(face, tile_x, tile_y)
+func request_tile(key: Vector3i):
+	if tiles.has(key) or loading.has(key):
+		return
+	var tile := TerrainTile.new(key.x, key.y, key.z, tile_size, tiles_per_face)
+	var task_id := WorkerThreadPool.add_task(source.fill_tile.bind(tile))
+	loading[key] = [tile, task_id]
 
-func load_tile(face: int, tile_x: int, tile_y: int) -> TerrainTile:
-	var tile := TerrainTile.new(face, tile_x, tile_y, tile_size, tiles_per_face)
-	source.fill_tile(tile)
-	tiles[Vector3i(face, tile_x, tile_y)] = tile
-	return tile
+func update():
+	var now := Time.get_ticks_msec()
+
+	for key in loading.keys():
+		var entry: Array = loading[key]
+		if WorkerThreadPool.is_task_completed(entry[1]):
+			WorkerThreadPool.wait_for_task_completion(entry[1])
+			tiles[key] = entry[0]
+			last_used[key] = now
+			loading.erase(key)
+
+	for key in tiles.keys():
+		if now - last_used[key] > UNLOAD_AFTER_MSEC:
+			tiles.erase(key)
+			last_used.erase(key)
+
+# Tile index the sampler will use for this u (or v)
+func tile_for_uv(u: float) -> int:
+	@warning_ignore("integer_division")
+	return TerrainSampler.cell_for_uv(u, face_size) / (tile_size - 1)
+
+# All tiles covering the uv rectangle of a face, or null if some are still loading (those get requested)
+func get_sampler(face: int, uv_min: Vector2, uv_max: Vector2) -> TerrainSampler:
+	var now := Time.get_ticks_msec()
+	var needed := {}
+	var missing := false
+
+	for tile_y in range(tile_for_uv(uv_min.y), tile_for_uv(uv_max.y) + 1):
+		for tile_x in range(tile_for_uv(uv_min.x), tile_for_uv(uv_max.x) + 1):
+			var key := Vector3i(face, tile_x, tile_y)
+			if tiles.has(key):
+				needed[key] = tiles[key]
+				last_used[key] = now
+			else:
+				request_tile(key)
+				missing = true
+
+	if missing:
+		return null
+	return TerrainSampler.new(needed, tiles_per_face, tile_size)
 
 func get_tile(face: int, tile_x: int, tile_y: int) -> TerrainTile:
 	return tiles.get(Vector3i(face, tile_x, tile_y))
@@ -40,48 +82,16 @@ func tile_index(pixel: int) -> int:
 	@warning_ignore("integer_division")
 	return mini(pixel / (tile_size - 1), tiles_per_face - 1)
 
+# 0 if the tile is not loaded
 func get_height(face: int, x: int, y: int) -> float:
 	var tile_x := tile_index(x)
 	var tile_y := tile_index(y)
-	return get_tile(face, tile_x, tile_y).get_height(x - tile_x * (tile_size - 1), y - tile_y * (tile_size - 1))
-
-
-# Height (0..1) at a direction on the sphere
-func sample(dir: Vector3) -> float:
-	var face := CubeSphere.get_face(dir)
-	return sample_face(face, CubeSphere.get_face_uv(dir, face))
-
-# Every bilinear cell lies completely inside one tile (borders are shared), so only one tile lookup is needed
-func sample_face(face: int, uv: Vector2) -> float:
-	var x = uv.x * (face_size - 1)
-	var y = uv.y * (face_size - 1)
-
-	var cell_x = clampi(int(floor(x)), 0, face_size - 2)
-	var cell_y = clampi(int(floor(y)), 0, face_size - 2)
-
-	@warning_ignore("integer_division")
-	var tile_x = cell_x / (tile_size - 1)
-	@warning_ignore("integer_division")
-	var tile_y = cell_y / (tile_size - 1)
 	var tile := get_tile(face, tile_x, tile_y)
+	if tile == null:
+		return 0.0
+	return tile.get_height(x - tile_x * (tile_size - 1), y - tile_y * (tile_size - 1))
 
-	var x0 = cell_x - tile_x * (tile_size - 1)
-	var y0 = cell_y - tile_y * (tile_size - 1)
-
-	var tx = x - cell_x
-	var ty = y - cell_y
-
-	var h00 = tile.get_height(x0, y0)
-	var h10 = tile.get_height(x0 + 1, y0)
-	var h01 = tile.get_height(x0, y0 + 1)
-	var h11 = tile.get_height(x0 + 1, y0 + 1)
-
-	var top = lerpf(h00, h10, tx)
-	var bottom = lerpf(h01, h11, tx)
-
-	return lerpf(top, bottom, ty)
-
-# All 6 faces next to each other, in face order, for debugging
+# All 6 faces next to each other, in face order, for debugging (only loaded tiles)
 func to_image() -> Image:
 	var img = Image.create(6 * face_size, face_size, false, Image.FORMAT_RGBA8)
 	for face in range(6):

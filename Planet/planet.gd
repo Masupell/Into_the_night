@@ -121,14 +121,16 @@ func _ready() -> void:
 
 	compute_lod_thresholds()
 
-	for face_corner in CubeSphere.FACES:
-		var q = Quad.new(self, 0, face_corner)
+	for face in range(6):
+		var q = Quad.new(self, 0, CubeSphere.FACES[face], null, Quad.Type.ROOT, face)
 		root_quads.append(q)
 		q.draw_chunk()
 
 	world_commands = WorldCommands.new(command_processor, self)
 
 func _process(delta: float) -> void:
+	terrain_data.update()
+
 	if not camera:
 		camera = get_viewport().get_camera_3d()
 		return
@@ -210,12 +212,7 @@ func world_from_texture():
 
 func generate_world_texture():
 	terrain_data = TerrainData.new(terrain_tiles_per_face, terrain_tile_size, NoiseSource.new(planet_seed))
-
-	var preview = terrain_data.to_image()
-	preview.save_png("res://test/terrain.png")
-	world_texture = ImageTexture.create_from_image(preview)
-	#world_image.save_png("res://test/terrain.png")
-	#world_texture = ImageTexture.create_from_image(world_image)
+	# No preview image here anymore, tiles load later on demand (terrain_data.to_image() shows the loaded ones)
 
 
 func update_sun_position():

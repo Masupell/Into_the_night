@@ -1,8 +1,8 @@
 class_name NoiseSource
 extends TerrainSource
 
-# Procedural continents and mountains from a seed (was Planet.generate_world_texture)
-const COAST_HEIGHT := 0.40 # where ocean ends and land starts in the raw values below, gets remapped to TerrainData.SEA_LEVEL
+# Procedural continents and mountains from a seed
+const COAST_HEIGHT := 0.40
 
 var continent_noise := FastNoiseLite.new()
 var mountain_noise := FastNoiseLite.new()
