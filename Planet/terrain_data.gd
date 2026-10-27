@@ -1,35 +1,39 @@
 class_name TerrainData
 extends RefCounted
 
-# Heights are stored as 6 cube face grids (CubeSpheres.FACES), each split into tiles_per_face * tiles_per_face tiles
-# Pixel 0 and face_size - 1, are exactly on the face borders, neighbouring faces share their values
-# so samples continuous. Tiles share their border pixels the same way, so a face has
-# tiles_per_face * (tile_size - 1) + 1 pixels per edge
+# Heights are stored as 6 cube face grids (CubeSpheres.FACES), as a pyramid of tile levels:
+# level 0 is one tile per face, level L has 2^L * 2^L tiles per face, all tiles have tile_size pixels per edge.
+# Pixel 0 and size - 1, are exactly on the face/tile borders, neighbouring faces and tiles share their values
+# so samples continuous. At the finest level a face has 2^max_level * (tile_size - 1) + 1 pixels per edge
+# Pixels of a level are also pixels of every finer level (every second one), with the same values,
+# so chunks using different levels still meet at the same heights
 #
 # Tiles are loaded on demand on the WorkerThreadPool and unloaded when nothing used them for a while.
 # Everything in here runs on the main thread only, chunk threads get a TerrainSampler instead
-var tiles_per_face: int
+var max_level: int
 var tile_size: int # pixels per tile edge
-var face_size: int
+var tiles_per_face: int # per edge at max_level
+var face_size: int # pixels per edge at max_level
 
 const SEA_LEVEL := 0.08 # height (0..1) of the water surface
 const UNLOAD_AFTER_MSEC := 10000
 
-var tiles: Dictionary = {} # Vector3i(face, tile_x, tile_y) -> TerrainTile, only finished tiles
-var loading: Dictionary = {} # Vector3i -> [TerrainTile, task_id], the tile is only touched by its task until it is done
-var last_used: Dictionary = {} # Vector3i -> msec
+var tiles: Dictionary = {} # Vector4i(face, level, tile_x, tile_y) -> TerrainTile, only finished tiles
+var loading: Dictionary = {} # Vector4i -> [TerrainTile, task_id], the tile is only touched by its task until it is done
+var last_used: Dictionary = {} # Vector4i -> msec
 var source: TerrainSource
 
-func _init(_tiles_per_face: int, _tile_size: int, _source: TerrainSource) -> void:
-	tiles_per_face = _tiles_per_face
+func _init(_max_level: int, _tile_size: int, _source: TerrainSource) -> void:
+	max_level = _max_level
 	tile_size = _tile_size
+	tiles_per_face = 1 << max_level
 	face_size = tiles_per_face * (tile_size - 1) + 1
 	source = _source
 
-func request_tile(key: Vector3i):
+func request_tile(key: Vector4i):
 	if tiles.has(key) or loading.has(key):
 		return
-	var tile := TerrainTile.new(key.x, key.y, key.z, tile_size, tiles_per_face)
+	var tile := TerrainTile.new(key.x, key.y, key.z, key.w, tile_size)
 	var task_id := WorkerThreadPool.add_task(source.fill_tile.bind(tile))
 	loading[key] = [tile, task_id]
 
@@ -49,49 +53,45 @@ func update():
 			tiles.erase(key)
 			last_used.erase(key)
 
-# Tile index the sampler will use for this u (or v)
-func tile_for_uv(u: float) -> int:
-	@warning_ignore("integer_division")
-	return TerrainSampler.cell_for_uv(u, face_size) / (tile_size - 1)
+# Coarsest tile level that still has at least one pixel per chunk grid cell.
+# Never finer than the quad level, so the chunk always lies inside one tile
+func tile_level_for(quad_level: int, grid_cells: int) -> int:
+	var level := 0
+	# pixels across the chunk: (tile_size - 1) * 2^level / 2^quad_level, compared without dividing
+	while level < mini(quad_level, max_level) and ((tile_size - 1) << level) < (grid_cells << quad_level):
+		level += 1
+	return level
 
-# All tiles covering the uv rectangle of a face, or null if some are still loading (those get requested)
-func get_sampler(face: int, uv_min: Vector2, uv_max: Vector2) -> TerrainSampler:
-	var now := Time.get_ticks_msec()
-	var needed := {}
-	var missing := false
+# The tile containing the chunk, or null while it is still loading (then it gets requested)
+func get_sampler(face: int, quad_level: int, grid_cells: int, uv_center: Vector2) -> TerrainSampler:
+	var level := tile_level_for(quad_level, grid_cells)
+	var count := 1 << level
+	var key := Vector4i(face, level, mini(int(uv_center.x * count), count - 1), mini(int(uv_center.y * count), count - 1))
 
-	for tile_y in range(tile_for_uv(uv_min.y), tile_for_uv(uv_max.y) + 1):
-		for tile_x in range(tile_for_uv(uv_min.x), tile_for_uv(uv_max.x) + 1):
-			var key := Vector3i(face, tile_x, tile_y)
-			if tiles.has(key):
-				needed[key] = tiles[key]
-				last_used[key] = now
-			else:
-				request_tile(key)
-				missing = true
-
-	if missing:
+	if not tiles.has(key):
+		request_tile(key)
 		return null
-	return TerrainSampler.new(needed, tiles_per_face, tile_size)
+	last_used[key] = Time.get_ticks_msec()
+	return TerrainSampler.new(tiles[key])
 
-func get_tile(face: int, tile_x: int, tile_y: int) -> TerrainTile:
-	return tiles.get(Vector3i(face, tile_x, tile_y))
+func get_tile(face: int, level: int, tile_x: int, tile_y: int) -> TerrainTile:
+	return tiles.get(Vector4i(face, level, tile_x, tile_y))
 
 # Tile that owns face pixel x/y. Border pixels belong to two (or four) tiles, this returns the lower one
 func tile_index(pixel: int) -> int:
 	@warning_ignore("integer_division")
 	return mini(pixel / (tile_size - 1), tiles_per_face - 1)
 
-# 0 if the tile is not loaded
+# Pixel of the finest level, 0 if that tile is not loaded
 func get_height(face: int, x: int, y: int) -> float:
 	var tile_x := tile_index(x)
 	var tile_y := tile_index(y)
-	var tile := get_tile(face, tile_x, tile_y)
+	var tile := get_tile(face, max_level, tile_x, tile_y)
 	if tile == null:
 		return 0.0
 	return tile.get_height(x - tile_x * (tile_size - 1), y - tile_y * (tile_size - 1))
 
-# All 6 faces next to each other, in face order, for debugging (only loaded tiles)
+# All 6 faces next to each other, in face order, for debugging (only loaded tiles of the finest level)
 func to_image() -> Image:
 	var img = Image.create(6 * face_size, face_size, false, Image.FORMAT_RGBA8)
 	for face in range(6):

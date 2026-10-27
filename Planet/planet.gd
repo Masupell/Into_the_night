@@ -14,8 +14,8 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
-@export var terrain_tiles_per_face: int = 4
-@export var terrain_tile_size: int = 129 # Pixels per tile edge, 4 * 128 + 1 = 513 per face, roughly the 2048 wide earth map at the equator
+@export var terrain_max_tile_level: int = 2 # 2^2 = 4 tiles per face edge at the finest level
+@export var terrain_tile_size: int = 129 # Pixels per tile edge, 4 * 128 + 1 = 513 per face at level 2, roughly the 2048 wide earth map at the equator
 
 @onready var chunk_container: Node3D = Node3D.new()
 var free_chunks: Array[Chunk] = []
@@ -205,15 +205,11 @@ func seed_origin_from(world_pos: Vector3):
 
 func world_from_texture():
 	var image = load("res://Planet/earth_map.png").get_image()
-	terrain_data = TerrainData.new(terrain_tiles_per_face, terrain_tile_size, EquirectSource.new(image))
+	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EquirectSource.new(image))
 	world_texture = ImageTexture.create_from_image(image)
-	#world_image = load("res://temp/earth_map.png").get_image()#Image.load_from_file("res://temp/earth_map.png")
-	#world_texture = ImageTexture.create_from_image(world_image)
 
 func generate_world_texture():
-	terrain_data = TerrainData.new(terrain_tiles_per_face, terrain_tile_size, NoiseSource.new(planet_seed))
-	# No preview image here anymore, tiles load later on demand (terrain_data.to_image() shows the loaded ones)
-
+	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, NoiseSource.new(planet_seed))
 
 func update_sun_position():
 	var sun_x = cos(sun_orbit_angle) * orbit_distance

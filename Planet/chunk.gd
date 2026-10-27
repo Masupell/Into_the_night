@@ -103,8 +103,8 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, face: int, uv_min: Vector2, uv_max: Vector2, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
-	var data = calculate_terrain_mesh(detail_noise, sampler, face, uv_min, uv_max, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
+	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
 	var total_data = {
 		"gen_id": gen_id,
 		"needs_collision": needs_collision,
@@ -113,7 +113,7 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 	}
 	chunk_instance.apply_generation_results.call_deferred(total_data)
 
-static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, face: int, uv_min: Vector2, uv_max: Vector2, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 
@@ -160,7 +160,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 			# a * (1 - t) + b * t, so the edges hit uv_min/uv_max exactly and neighbouring chunks sample the same values
 			var face_uv = Vector2(uv_min.x * (1.0 - u) + uv_max.x * u, uv_min.y * (1.0 - v) + uv_max.y * v)
-			var macro_height_ratio = sampler.sample_face(face, face_uv)
+			var macro_height_ratio = sampler.sample(face_uv)
 
 			if macro_height_ratio < min_chunk_height:
 				min_chunk_height = macro_height_ratio

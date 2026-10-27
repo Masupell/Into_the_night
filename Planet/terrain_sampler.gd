@@ -1,51 +1,33 @@
 class_name TerrainSampler
 extends RefCounted
 
-# Read only set of tiles for one chunk, handed to the chunk generation thread.
-# Tiles never change after they are loaded and this dictionary belongs only to this chunk,
-# so the thread never touches TerrainData.tiles and no locking is needed
-var tiles: Dictionary # Vector3i(face, tile_x, tile_y) -> TerrainTile
-var tile_size: int
-var face_size: int
+# The one tile a chunk samples from, handed to the chunk generation thread.
+# A chunk always lies completely inside one tile of its tile level (both are the same quadtree split),
+# tiles never change after loading, so the thread never touches TerrainData and no locking is needed
+var tile: TerrainTile
 
-func _init(_tiles: Dictionary, _tiles_per_face: int, _tile_size: int) -> void:
-	tiles = _tiles
-	tile_size = _tile_size
-	face_size = _tiles_per_face * (tile_size - 1) + 1
+func _init(_tile: TerrainTile) -> void:
+	tile = _tile
 
-# Bilinear cell containing u (or v), same math as TerrainData.tile_for_uv, so the needed tiles always match
-static func cell_for_uv(u: float, _face_size: int) -> int:
-	return clampi(int(floor(u * (_face_size - 1))), 0, _face_size - 2)
+# uv is on the whole face, has to be inside this tile (gets clamped onto its border otherwise)
+func sample(uv: Vector2) -> float:
+	var step := tile.size - 1
+	var x := clampf((uv.x * tile.tiles_per_face - tile.tile_x) * step, 0.0, step)
+	var y := clampf((uv.y * tile.tiles_per_face - tile.tile_y) * step, 0.0, step)
 
-# Every bilinear cell lies completely inside one tile (borders are shared), so only one tile lookup is needed
-func sample_face(face: int, uv: Vector2) -> float:
-	var x = uv.x * (face_size - 1)
-	var y = uv.y * (face_size - 1)
+	# floor, but at most the second to last pixel, so x0 + 1 stays inside the tile (tx is 1.0 on the last pixel then)
+	var x0 := mini(int(x), step - 1)
+	var y0 := mini(int(y), step - 1)
 
-	var cell_x = cell_for_uv(uv.x, face_size)
-	var cell_y = cell_for_uv(uv.y, face_size)
+	var tx := x - x0
+	var ty := y - y0
 
-	@warning_ignore("integer_division")
-	var tile_x = cell_x / (tile_size - 1)
-	@warning_ignore("integer_division")
-	var tile_y = cell_y / (tile_size - 1)
-	var tile: TerrainTile = tiles.get(Vector3i(face, tile_x, tile_y))
-	if tile == null:
-		push_error("TerrainSampler: tile %s missing, chunk asked for the wrong tiles" % Vector3i(face, tile_x, tile_y))
-		return 0.0
+	var h00 := tile.get_height(x0, y0)
+	var h10 := tile.get_height(x0 + 1, y0)
+	var h01 := tile.get_height(x0, y0 + 1)
+	var h11 := tile.get_height(x0 + 1, y0 + 1)
 
-	var x0 = cell_x - tile_x * (tile_size - 1)
-	var y0 = cell_y - tile_y * (tile_size - 1)
-
-	var tx = x - cell_x
-	var ty = y - cell_y
-
-	var h00 = tile.get_height(x0, y0)
-	var h10 = tile.get_height(x0 + 1, y0)
-	var h01 = tile.get_height(x0, y0 + 1)
-	var h11 = tile.get_height(x0 + 1, y0 + 1)
-
-	var top = lerpf(h00, h10, tx)
-	var bottom = lerpf(h01, h11, tx)
+	var top := lerpf(h00, h10, tx)
+	var bottom := lerpf(h01, h11, tx)
 
 	return lerpf(top, bottom, ty)

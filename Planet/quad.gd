@@ -258,14 +258,14 @@ func draw_chunk():
 
 	chunk.owner_quad = self
 
-	var sampler := planet.terrain_data.get_sampler(face, uv_min, uv_max)
-	if sampler == null: # tiles are loading, chunk retries next frame and keeps its old mesh until then
+	var current_grid_size = get_grid_size(level)
+
+	var sampler := planet.terrain_data.get_sampler(face, level, current_grid_size, (uv_min + uv_max) * 0.5)
+	if sampler == null: # tile is loading, chunk retries next frame and keeps its old mesh until then
 		chunk.waiting_for_tiles = true
 		return
 
 	chunk.generation_id += 1
-
-	var current_grid_size = get_grid_size(level)
 
 	var n_nb = get_neighbor_north()
 	var s_nb = get_neighbor_south()
@@ -285,7 +285,7 @@ func draw_chunk():
 		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, " ", chunk_world_size)
 
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, face, uv_min, uv_max, corners, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
