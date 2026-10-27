@@ -7,6 +7,7 @@ var corners: Array
 var face: int # cube face, same for the whole tree
 var uv_min: Vector2 # uv rectangle on the face, top left / bottom right corner
 var uv_max: Vector2
+var center: PackedFloat64Array # x, y, z of the surface center in planet space, double precision, origin of the chunk mesh
 var children: Array[Quad] = []
 var chunk: Chunk = null
 
@@ -53,8 +54,8 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 			child.update_lod(camera_pos, frustum_planes)
 		return
 
-	var center = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
-	var surface_center = CubeSphere.spherify(center) * planet.radius
+	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
+	var surface_center = CubeSphere.spherify(mid_point) * planet.radius
 	var dist_to_cam = camera_pos.distance_to(surface_center)
 
 	if level < planet.max_lod_level and dist_to_cam < planet.split_distances[level]:
@@ -285,7 +286,7 @@ func draw_chunk():
 		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, " ", chunk_world_size)
 
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
@@ -308,6 +309,15 @@ func reveal_leaves():
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
 	var surface_center = CubeSphere.spherify(mid_point) * planet.radius
+
+	var x2: float = mid_point.x * mid_point.x
+	var y2: float = mid_point.y * mid_point.y
+	var z2: float = mid_point.z * mid_point.z
+	center = PackedFloat64Array([
+		CubeSphere.spherify_axis(mid_point.x, y2, z2) * planet.radius,
+		CubeSphere.spherify_axis(mid_point.y, z2, x2) * planet.radius,
+		CubeSphere.spherify_axis(mid_point.z, x2, y2) * planet.radius,
+	])
 
 	bounding_center = surface_center * (1.0 + (planet.max_height / planet.radius) * 0.5)
 

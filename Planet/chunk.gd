@@ -2,6 +2,7 @@ class_name Chunk
 extends MeshInstance3D
 
 const DETAIL_TUNED_FOR_HEIGHT := 200.0 # max_height the detail noise amplitudes below were tuned for, scales with it
+const DETAIL_TUNED_FOR_RADIUS := 5000.0 # radius the detail noise frequencies were tuned for, so features keep their size in meters
 
 var water_mesh_instance: MeshInstance3D
 
@@ -16,6 +17,10 @@ var waiting_for_tiles: bool = false
 var owner_quad: Quad = null
 
 var planet: Planet # Easier with reference right now
+
+# Mesh vertices are relative to this point (planet space, double precision), so they stay small and precise.
+# The chunk node sits at center - camera position, computed in doubles, see Planet.shift_origin
+var center: PackedFloat64Array
 
 func _process(_delta: float) -> void:
 	if active_task_id != -1:
@@ -52,6 +57,7 @@ func completely_reset_and_return():
 	redraw_requested = false
 	waiting_for_tiles = false
 	owner_quad = null
+	center = PackedFloat64Array()
 	if water_mesh_instance:
 		water_mesh_instance.mesh = null
 	for child in get_children():
@@ -60,10 +66,18 @@ func completely_reset_and_return():
 	planet.return_chunk(self)
 
 
+func update_position():
+	if center.is_empty():
+		return
+	position = Vector3(center[0] - planet.true_x, center[1] - planet.true_y, center[2] - planet.true_z)
+
 # On Main Thread
 func apply_generation_results(total_data: Dictionary):
 	if total_data["gen_id"] != generation_id:
 		return
+
+	center = total_data["center"]
+	update_position()
 
 	var terrain_data = total_data["terrain"]
 	var water_data = total_data["water"]
@@ -105,17 +119,18 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
-	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
+	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, terrain_center, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
 	var total_data = {
 		"gen_id": gen_id,
+		"center": terrain_center,
 		"needs_collision": needs_collision,
 		"terrain": data["mesh_array"],
 		"water": data["water_data"]
 	}
 	chunk_instance.apply_generation_results.call_deferred(total_data)
 
-static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 
@@ -140,8 +155,14 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	heights.resize(total_vertices_all)
 	uvs.resize(total_vertices_all)
 
-	var sphere_points_cache = PackedVector3Array()
-	sphere_points_cache.resize(total_vertices)
+	var sphere_points_cache = PackedFloat64Array() # x, y, z per vertex, double precision, for the water
+	sphere_points_cache.resize(total_vertices * 3)
+
+	var c0: Vector3 = corners[0]
+	var c1: Vector3 = corners[1]
+	var c2: Vector3 = corners[2]
+	var c3: Vector3 = corners[3]
+	var detail_scale := radius / DETAIL_TUNED_FOR_RADIUS
 
 	var min_chunk_height := INF
 
@@ -153,12 +174,18 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 			uvs[idx] = Vector2(u, v)
 
-			var top_lerp = corners[0].lerp(corners[1], u) # top-left to top-right
-			var bottom_lerp = corners[3].lerp(corners[2], u) # bottom-left to bottom-right
-			var cube_point = top_lerp.lerp(bottom_lerp, v) # vertical
-
-			var sphere_point = CubeSphere.spherify(cube_point)
-			sphere_points_cache[idx] = sphere_point
+			# Cube point and spherify on plain floats (64 bit), Vector3 (32 bit) is only ~3cm precise at 300km
+			# top-left to top-right, bottom-left to bottom-right, then vertical
+			var px := lerpf(lerpf(c0.x, c1.x, u), lerpf(c3.x, c2.x, u), v)
+			var py := lerpf(lerpf(c0.y, c1.y, u), lerpf(c3.y, c2.y, u), v)
+			var pz := lerpf(lerpf(c0.z, c1.z, u), lerpf(c3.z, c2.z, u), v)
+			var sx := CubeSphere.spherify_axis(px, py * py, pz * pz)
+			var sy := CubeSphere.spherify_axis(py, pz * pz, px * px)
+			var sz := CubeSphere.spherify_axis(pz, px * px, py * py)
+			sphere_points_cache[idx * 3] = sx
+			sphere_points_cache[idx * 3 + 1] = sy
+			sphere_points_cache[idx * 3 + 2] = sz
+			var sphere_point := Vector3(sx, sy, sz) # 32 bit is fine for directions, noise and normals
 
 			# a * (1 - t) + b * t, so the edges hit uv_min/uv_max exactly and neighbouring chunks sample the same values
 			var face_uv = Vector2(uv_min.x * (1.0 - u) + uv_max.x * u, uv_min.y * (1.0 - v) + uv_max.y * v)
@@ -169,9 +196,9 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			var macro_height = macro_height_ratio * height
 
 			# A bit more detail, needs twaking, but first step
-			var large_detail = detail_noise.get_noise_3dv(sphere_point * 80.0)
-			var medium_detail = detail_noise.get_noise_3dv(sphere_point * 250.0)
-			var small_detail = detail_noise.get_noise_3dv(sphere_point * 700.0)
+			var large_detail = detail_noise.get_noise_3dv(sphere_point * (80.0 * detail_scale))
+			var medium_detail = detail_noise.get_noise_3dv(sphere_point * (250.0 * detail_scale))
+			var small_detail = detail_noise.get_noise_3dv(sphere_point * (700.0 * detail_scale))
 
 			var detail = large_detail * 4.0 + medium_detail * 1.5 + small_detail * 0.4
 			var land = smoothstep(0.0, 0.05, macro_height_ratio) # no detail below sea level
@@ -181,9 +208,8 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			macro_height += detail * detail_strength * land * (height / DETAIL_TUNED_FOR_HEIGHT)
 
 
-			var vertex_pos = sphere_point * (radius + macro_height)
-
-			vertices[idx] = vertex_pos
+			var r: float = radius + macro_height
+			vertices[idx] = Vector3(sx * r - terrain_center[0], sy * r - terrain_center[1], sz * r - terrain_center[2])
 			normals[idx] = sphere_point.normalized()
 			heights[idx] = Vector2(macro_height_ratio, 0.0)
 
@@ -340,7 +366,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	mesh_array[Mesh.ARRAY_TEX_UV2] = heights
 	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
 
-	var water_data = calculate_water_mesh(grid_size, radius, min_chunk_height, sphere_points_cache)
+	var water_data = calculate_water_mesh(grid_size, radius, terrain_center, min_chunk_height, sphere_points_cache)
 
 	return {
 		"mesh_array": mesh_array,
@@ -348,7 +374,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	}
 
 # Sea level is height 0, so the water is just a sphere at the planet radius
-static func calculate_water_mesh(grid_size: int, radius: float, min_terrain_height: float, sphere_points_cache: PackedVector3Array) -> Dictionary:
+static func calculate_water_mesh(grid_size: int, radius: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array) -> Dictionary:
 	if min_terrain_height > 0.1:
 		return { "should_render": false }
 
@@ -368,20 +394,18 @@ static func calculate_water_mesh(grid_size: int, radius: float, min_terrain_heig
 	uvs.resize(total_vertices)
 	indices.resize(grid_size * grid_size * 6)
 
-	var water_radisu = radius
-
 	for y in range(num_vertices):
 		for x in range(num_vertices):
 			var idx = x + (y * num_vertices)
 			var u = float(x) / grid_size
 			var v = float(y) / grid_size
 
-			var sphere_point = sphere_points_cache[idx]
+			var sx := sphere_points_cache[idx * 3]
+			var sy := sphere_points_cache[idx * 3 + 1]
+			var sz := sphere_points_cache[idx * 3 + 2]
 
-			var vertex_pos = sphere_point * water_radisu
-
-			vertices[idx] = vertex_pos
-			normals[idx] = sphere_point
+			vertices[idx] = Vector3(sx * radius - terrain_center[0], sy * radius - terrain_center[1], sz * radius - terrain_center[2])
+			normals[idx] = Vector3(sx, sy, sz)
 			uvs[idx] = Vector2(u, v)
 
 	for y in range(grid_size):

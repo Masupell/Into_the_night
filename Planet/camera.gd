@@ -2,8 +2,8 @@ class_name FreeCam
 extends CharacterBody3D
 
 const MIN_SPEED = 1.0
-const MAX_SPEED = 10000.0
-@export var move_speed: float = 2000.0
+const MAX_SPEED = 100000.0
+@export var move_speed: float = 20000.0
 @export var look_sensitivity: float = 0.1
 @export var planet_position := Vector3.ZERO
 

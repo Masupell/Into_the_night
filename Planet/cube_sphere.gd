@@ -25,6 +25,11 @@ static func spherify(p: Vector3) -> Vector3:
 	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 	return res
 
+# One component of spherify on plain floats, which are 64 bit in GDScript (Vector3 is only 32 bit)
+# a is the component itself, b2 and c2 are the squares of the other two
+static func spherify_axis(a: float, b2: float, c2: float) -> float:
+	return a * sqrt(1.0 - b2 / 2.0 - c2 / 2.0 + b2 * c2 / 3.0)
+
 static func face_to_cube(face: int, uv: Vector2) -> Vector3:
 	var c: Array = FACES[face]
 	return c[0] + (c[1] - c[0]) * uv.x + (c[3] - c[0]) * uv.y

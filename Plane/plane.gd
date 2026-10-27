@@ -57,7 +57,6 @@ var elevator_rest: Vector3
 var rudder_rest: Vector3
 
 @export var hud: FligthHUD
-@export var planet_radius: float = 5000.0
 
 @export var planet: Planet
 
@@ -196,7 +195,7 @@ func _physics_process(delta: float) -> void:
 
 	# Raycast for above ground height measure
 	var space_state = get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(global_position, global_position - planet_up * planet_radius)
+	var query = PhysicsRayQueryParameters3D.create(global_position, global_position - planet_up * planet.radius)
 	query.exclude = [self.get_rid()]
 	var result = space_state.intersect_ray(query)
 	var current_agl: float = -1.0
@@ -232,7 +231,7 @@ func _physics_process(delta: float) -> void:
 	if hud:
 		var power = move_speed/max_speed
 		var current_speed = velocity.length()
-		var current_amsl = true_pos.length() - planet_radius
+		var current_amsl = true_pos.length() - planet.radius
 		var pitch_rad = asin(clamp(forward.dot(planet_up), -1.0, 1.0))
 		var pitch_deg = rad_to_deg(pitch_rad)
 		var roll_rad = atan2(-global_transform.basis.x.dot(planet_up), global_transform.basis.y.dot(planet_up))

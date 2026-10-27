@@ -3,8 +3,10 @@ extends Node3D
 
 @export var planet_seed: int = 0
 
-@export var radius := 5000.0
-@export var max_height: float = 50.0#200.0#500.0
+@export var radius := 63710#5000.0
+@export var start_altitude := 70000.0
+@export var max_height: float = 442.4#88.48#200.0#500.0
+@export var atmosphere_radius: float = radius+5000.0
 
 @export_group("Terrain Settings")
 @export var terrain_noise: FastNoiseLite
@@ -39,7 +41,8 @@ var atmosphere: MeshInstance3D
 @export var real_seconds_per_game_minute: float = 1.0
 var time_speed_multiplier: float = 1.0
 var orbit_speed: float = 0.0
-@export var orbit_distance: float = 7000.0
+@export var orbit_distance_factor: float = 1.4 # debug sun sphere distance, times radius
+var orbit_distance: float
 
 var sun_orbit_angle: float = 0.0
 
@@ -50,7 +53,7 @@ var water_material: ShaderMaterial
 
 var world_commands: WorldCommands
 
-var edge_length: float = (radius * 2.0) / sqrt(3.0)
+var edge_length: float # set in _ready, an initializer here would still use the default radius, not the one from the scene
 
 @export var plane: AirPlane
 @export var free_cam: FreeCam
@@ -67,7 +70,14 @@ func _ready() -> void:
 		#var chunk_world_size = (radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, ": ", chunk_world_size)
 
-	free_cam.global_position.z = 12000.0
+	edge_length = (radius * 2.0) / sqrt(3.0)
+	orbit_distance = radius * orbit_distance_factor
+
+	# Has to see the whole planet from a bit further out, 100km was enough for 5km radius
+	for cam in get_tree().root.find_children("*", "Camera3D", true, false):
+		cam.far = maxf(cam.far, radius * 4.0)
+
+	free_cam.global_position.z = radius + start_altitude
 	#plane.global_position = free_cam.global_position
 	seed_origin_from(free_cam.global_position)
 	free_cam.global_position = Vector3.ZERO
@@ -94,7 +104,6 @@ func _ready() -> void:
 	water_material.shader = preload("res://Planet/water.gdshader")
 
 	atmosphere = MeshInstance3D.new()
-	var atmosphere_radius: float = radius + max_height + 200.0
 
 	var atmosphere_mesh = SphereMesh.new()
 	atmosphere_mesh.radius = atmosphere_radius
@@ -120,6 +129,7 @@ func _ready() -> void:
 		terrain_noise.seed = randi()
 
 	chunk_container.name = "ChunkPool"
+	chunk_container.top_level = true # stays at the world origin, chunks position themselves (see update_chunk_positions)
 	add_child(chunk_container)
 
 	compute_lod_thresholds()
@@ -194,6 +204,7 @@ func shift_origin(moved_by: Vector3):
 	true_y += moved_by.y
 	true_z += moved_by.z
 	global_position = -get_true_position()
+	update_chunk_positions()
 
 	# temprorary for plane
 	if camera_mode != 1 and plane:
@@ -205,6 +216,13 @@ func seed_origin_from(world_pos: Vector3):
 	true_y = world_pos.y
 	true_z = world_pos.z
 	global_position = -get_true_position()
+	update_chunk_positions()
+
+# Chunks are not moved by the planet node (float32: at 300km that would be ~3cm off and jitter),
+# each one is placed at its center - true position, computed in doubles
+func update_chunk_positions():
+	for c in chunk_container.get_children():
+		c.update_position()
 
 func world_from_texture():
 	var image = load("res://Planet/earth_map.png").get_image()
