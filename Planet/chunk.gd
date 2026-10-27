@@ -1,6 +1,8 @@
 class_name Chunk
 extends MeshInstance3D
 
+const DETAIL_TUNED_FOR_HEIGHT := 200.0 # max_height the detail noise amplitudes below were tuned for, scales with it
+
 var water_mesh_instance: MeshInstance3D
 
 var active_task_id: int = -1
@@ -176,7 +178,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			var mountain_factor = smoothstep(0.25, 0.67, macro_height_ratio)
 			var detail_strength = lerp(1.0, 6.0, mountain_factor)
 
-			macro_height += detail * detail_strength * land
+			macro_height += detail * detail_strength * land * (height / DETAIL_TUNED_FOR_HEIGHT)
 
 
 			var vertex_pos = sphere_point * (radius + macro_height)

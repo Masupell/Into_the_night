@@ -4,7 +4,7 @@ extends Node3D
 @export var planet_seed: int = 0
 
 @export var radius := 5000.0
-@export var max_height: float = 200.0#500.0
+@export var max_height: float = 50.0#200.0#500.0
 
 @export_group("Terrain Settings")
 @export var terrain_noise: FastNoiseLite
@@ -14,8 +14,9 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
-@export var terrain_max_tile_level: int = 2 # 2^2 = 4 tiles per face edge at the finest level
-@export var terrain_tile_size: int = 129 # Pixels per tile edge, 4 * 128 + 1 = 513 per face at level 2, roughly the 2048 wide earth map at the equator
+@export var terrain_max_tile_level: int = 6 # 2^6 * 128 + 1 = 8193 pixels per face edge, ETOPO 60s has 5400 per face (90 degrees)
+@export var terrain_tile_size: int = 129 # Pixels per tile edge
+@export var earth_meters_per_unit: float = 8849.0 # Real meters that become max_height, Everest = max_height
 
 @onready var chunk_container: Node3D = Node3D.new()
 var free_chunks: Array[Chunk] = []
@@ -74,7 +75,8 @@ func _ready() -> void:
 
 	planet_seed = randi()
 	#generate_world_texture()
-	world_from_texture()
+	#world_from_texture()
+	world_from_etopo()
 
 	detail_noise.seed = planet_seed + 4321
 	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -205,8 +207,11 @@ func seed_origin_from(world_pos: Vector3):
 
 func world_from_texture():
 	var image = load("res://Planet/earth_map.png").get_image()
-	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EquirectSource.new(image, 0.08)) # 0.08 is roughly the sea in this map
+	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, ImageSource.new(image, 0.08)) # 0.08 is roughly the sea in this map
 	world_texture = ImageTexture.create_from_image(image)
+
+func world_from_etopo():
+	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EtopoSource.new("res://data/etopo_60s", earth_meters_per_unit))
 
 func generate_world_texture():
 	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, NoiseSource.new(planet_seed))

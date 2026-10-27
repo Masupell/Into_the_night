@@ -1,22 +1,17 @@
 class_name EquirectSource
 extends TerrainSource
 
-# Equirectangular heightmap (red channel right now), like the earth map
-var data: PackedFloat32Array
+# Base for equirectangular (longitude/latitude) heightmaps: projection and sampling.
+# Subclasses load the data and return single pixels with get_value (ImageSource, EtopoSource)
 var width: int
 var height: int
-var sea_level: float # value in the image that is sea level, gets subtracted
 
-func _init(source: Image, _sea_level: float) -> void:
-	sea_level = _sea_level
-	var img := source.duplicate() as Image
-	img.convert(Image.FORMAT_RF)
-	data = img.get_data().to_float32_array()
-	width = img.get_width()
-	height = img.get_height()
+# Height of pixel x + y * width, already relative to sea level
+func get_value(_index: int) -> float:
+	return 0.0
 
 func height_at(dir: Vector3) -> float:
-	return sample(get_uv(dir)) - sea_level
+	return sample(get_uv(dir))
 
 # Equirectangular projection (Vector3.DOWN is the north pole)
 static func get_uv(pos: Vector3) -> Vector2:
@@ -42,7 +37,7 @@ func sample(uv: Vector2) -> float:
 	var x1 = (x0 + 1) % width
 	var y1 = mini(y0 + 1, height - 1)
 
-	var top = lerpf(data[x0 + y0 * width], data[x1 + y0 * width], tx)
-	var bottom = lerpf(data[x0 + y1 * width], data[x1 + y1 * width], tx)
+	var top = lerpf(get_value(x0 + y0 * width), get_value(x1 + y0 * width), tx)
+	var bottom = lerpf(get_value(x0 + y1 * width), get_value(x1 + y1 * width), tx)
 
 	return lerpf(top, bottom, ty)
