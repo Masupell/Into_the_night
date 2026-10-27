@@ -48,7 +48,7 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 		return
 
 	var center = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
-	var surface_center = Planet.spherify(center) * planet.radius
+	var surface_center = CubeSphere.spherify(center) * planet.radius
 	var dist_to_cam = camera_pos.distance_to(surface_center)
 
 	if level < planet.max_lod_level and dist_to_cam < planet.split_distances[level]:
@@ -295,12 +295,12 @@ func reveal_leaves():
 
 func calculate_bounds():
 	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
-	var surface_center = Planet.spherify(mid_point) * planet.radius
+	var surface_center = CubeSphere.spherify(mid_point) * planet.radius
 
 	bounding_center = surface_center * (1.0 + (planet.max_height / planet.radius) * 0.5)
 
 	var center_dir = surface_center.normalized()
-	var corner_dir = Planet.spherify(corners[0]).normalized()
+	var corner_dir = CubeSphere.spherify(corners[0]).normalized()
 	horizon_cos_alpha = center_dir.dot(corner_dir)
 	horizon_sin_alpha = sqrt(maxf(0.0, 1.0 - horizon_cos_alpha * horizon_cos_alpha))
 
@@ -316,7 +316,7 @@ func calculate_bounds():
 	points.append(corners[3].lerp(corners[0], 0.5))
 
 	for p in points:
-		var s = Planet.spherify(p)
+		var s = CubeSphere.spherify(p)
 		var surface = s * planet.radius
 		var mountains = s * (planet.radius + planet.max_height)
 		min_v = min_v.min(surface).min(mountains)

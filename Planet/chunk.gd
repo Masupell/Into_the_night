@@ -149,7 +149,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, terrain_data: Te
 			var bottom_lerp = corners[3].lerp(corners[2], u) # bottom-left to bottom-right
 			var cube_point = top_lerp.lerp(bottom_lerp, v) # vertical
 
-			var sphere_point = spherify(cube_point)
+			var sphere_point = CubeSphere.spherify(cube_point)
 			sphere_points_cache[idx] = sphere_point
 
 			var macro_height_ratio = terrain_data.sample(sphere_point)
@@ -398,15 +398,3 @@ static func calculate_water_mesh(grid_size: int, radius: float, height: float, m
 		"should_render": true,
 		"mesh_array": mesh_array
 	}
-
-
-static func spherify(p: Vector3) -> Vector3:
-	var x2 := p.x * p.x
-	var y2 := p.y * p.y
-	var z2 := p.z * p.z
-
-	var res := Vector3.ZERO
-	res.x = p.x * sqrt(1.0 - y2 / 2.0 - z2 / 2.0 + y2 * z2 / 3.0)
-	res.y = p.y * sqrt(1.0 - z2 / 2.0 - x2 / 2.0 + z2 * x2 / 3.0)
-	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
-	return res

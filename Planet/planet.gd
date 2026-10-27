@@ -26,15 +26,6 @@ var split_distances: Array[float] = []
 @onready var camera = get_viewport().get_camera_3d()
 var camera_mode = 2
 
-const CUBE_FACES: Array = [
-	[Vector3(-1, 1, 1), Vector3( 1, 1, 1), Vector3( 1,-1, 1), Vector3(-1,-1, 1)], # Front (+Z)
-	[Vector3( 1, 1, 1), Vector3( 1, 1,-1), Vector3( 1,-1,-1), Vector3( 1,-1, 1)], # Right (+X)
-	[Vector3( 1, 1,-1), Vector3(-1, 1,-1), Vector3(-1,-1,-1), Vector3( 1,-1,-1)], # Back  (-Z)
-	[Vector3(-1, 1,-1), Vector3(-1, 1, 1), Vector3(-1,-1, 1), Vector3(-1,-1,-1)], # Left  (-X)
-	[Vector3(-1, 1,-1), Vector3( 1, 1,-1), Vector3( 1, 1, 1), Vector3(-1, 1, 1)], # Top   (+Y)
-	[Vector3(-1,-1, 1), Vector3( 1,-1, 1), Vector3( 1,-1,-1), Vector3(-1,-1,-1)], # Bottom(-Y)
-]
-
 #var world_image: Image
 var terrain_data: TerrainData
 var world_texture: ImageTexture
@@ -129,7 +120,7 @@ func _ready() -> void:
 	
 	compute_lod_thresholds()
 	
-	for face_corner in CUBE_FACES:
+	for face_corner in CubeSphere.FACES:
 		var q = Quad.new(self, 0, face_corner)
 		root_quads.append(q)
 		q.draw_chunk()
@@ -208,17 +199,6 @@ func seed_origin_from(world_pos: Vector3):
 	true_y = world_pos.y
 	true_z = world_pos.z
 	global_position = -get_true_position()
-
-static func spherify(p: Vector3) -> Vector3:
-	var x2 := p.x * p.x
-	var y2 := p.y * p.y
-	var z2 := p.z * p.z
-	
-	var res := Vector3.ZERO
-	res.x = p.x * sqrt(1.0 - y2 / 2.0 - z2 / 2.0 + y2 * z2 / 3.0)
-	res.y = p.y * sqrt(1.0 - z2 / 2.0 - x2 / 2.0 + z2 * x2 / 3.0)
-	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
-	return res
 
 func world_from_texture():
 	terrain_data = TerrainData.new(2048, 2048)
