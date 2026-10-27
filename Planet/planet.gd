@@ -14,6 +14,7 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
+@export var terrain_face_size: int = 512 # Pixels per cube face edge, 512 because of 2048 wide earth map at equator, rougly
 
 @onready var chunk_container: Node3D = Node3D.new()
 var free_chunks: Array[Chunk] = []
@@ -60,43 +61,42 @@ var true_y: float = 0.0
 var true_z: float = 0.0
 
 func _ready() -> void:
-	
 	#for level in range(17):
 		#var chunk_world_size = (radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, ": ", chunk_world_size)
-	
+
 	free_cam.global_position.z = 12000.0
 	#plane.global_position = free_cam.global_position
 	seed_origin_from(free_cam.global_position)
 	free_cam.global_position = Vector3.ZERO
 	plane.global_position = Vector3.ZERO
-	
+
 	planet_seed = randi()
 	#generate_world_texture()
 	world_from_texture()
-	
+
 	detail_noise.seed = planet_seed + 4321
 	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	detail_noise.frequency = 0.25
 	detail_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	detail_noise.fractal_octaves = 4
 	detail_noise.fractal_gain = 0.5
-	
+
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = preload("res://Planet/planet.gdshader")
 	terrain_material.set_shader_parameter("world_map", world_texture)
-	
+
 	water_material = ShaderMaterial.new()
 	water_material.shader = preload("res://Planet/water.gdshader")
-	
+
 	atmosphere = MeshInstance3D.new()
 	var atmosphere_radius: float = radius + max_height + 200.0
-	
+
 	var atmosphere_mesh = SphereMesh.new()
 	atmosphere_mesh.radius = atmosphere_radius
 	atmosphere_mesh.height = atmosphere_radius*2.0
 	atmosphere.mesh = atmosphere_mesh
-	
+
 	var atmosphere_material = ShaderMaterial.new()
 	atmosphere_material.shader = preload("res://Planet/atmosphere.gdshader")
 	atmosphere_material.render_priority = 10
@@ -104,34 +104,34 @@ func _ready() -> void:
 	atmosphere_material.set_shader_parameter("atmosphere_radius", atmosphere_radius)
 	atmosphere.material_override = atmosphere_material
 	add_child(atmosphere)
-	
+
 	sun.global_position = Vector3(0.0, 0.0, orbit_distance)
 	sun.look_at(global_position, Vector3.UP)
-	
+
 	var real_seconds_per_day = 1440.0 * real_seconds_per_game_minute
 	orbit_speed = TAU/real_seconds_per_day
-	
+
 	if not terrain_noise:
 		terrain_noise = FastNoiseLite.new()
 		terrain_noise.seed = randi()
-	
+
 	chunk_container.name = "ChunkPool"
 	add_child(chunk_container)
-	
+
 	compute_lod_thresholds()
-	
+
 	for face_corner in CubeSphere.FACES:
 		var q = Quad.new(self, 0, face_corner)
 		root_quads.append(q)
 		q.draw_chunk()
-	
+
 	world_commands = WorldCommands.new(command_processor, self)
 
 func _process(delta: float) -> void:
 	if not camera:
 		camera = get_viewport().get_camera_3d()
 		return
-	
+
 	#var cam_pos = to_local(camera.global_position) # as long as planet is on 0,0,0 'to_local' does not matter
 	var cam_pos = get_true_position()
 	var frustum_planes = []
@@ -139,10 +139,10 @@ func _process(delta: float) -> void:
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
 	for q in root_quads:
 		q.update_lod(cam_pos, frustum_planes)
-	
+
 	sun_orbit_angle += orbit_speed * delta
 	update_sun_position()
-	
+
 	var sun_dir = Vector3(cos(sun_orbit_angle), 0.0, sin(sun_orbit_angle)).normalized()
 	var mat = atmosphere.material_override as ShaderMaterial
 	if mat:
@@ -151,7 +151,7 @@ func _process(delta: float) -> void:
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)
 	var edge_size: float = (radius * 2.0) / sqrt(3.0)
-	
+
 	for level in range(max_lod_level + 1):
 		var level_edge = edge_size / pow(2, level)
 		var level_diagonal = level_edge * sqrt(2.0)
@@ -188,7 +188,7 @@ func shift_origin(moved_by: Vector3):
 	true_y += moved_by.y
 	true_z += moved_by.z
 	global_position = -get_true_position()
-	
+
 	# temprorary for plane
 	if camera_mode != 1 and plane:
 		plane.global_position -= moved_by
@@ -201,17 +201,17 @@ func seed_origin_from(world_pos: Vector3):
 	global_position = -get_true_position()
 
 func world_from_texture():
-	terrain_data = TerrainData.new(2048, 2048)
+	terrain_data = TerrainData.new(terrain_face_size)
 	var image = load("res://Planet/earth_map.png").get_image()
-	terrain_data.load_from_image(image)
+	terrain_data.load_from_equirect(image)
 	world_texture = ImageTexture.create_from_image(image)
 	#world_image = load("res://temp/earth_map.png").get_image()#Image.load_from_file("res://temp/earth_map.png")
 	#world_texture = ImageTexture.create_from_image(world_image)
 
 func generate_world_texture():
 	#world_image = Image.create(2048, 2048, false, Image.FORMAT_RGBA8)
-	terrain_data = TerrainData.new(2048, 2048)
-	
+	terrain_data = TerrainData.new(terrain_face_size)
+
 	var continent_noise = FastNoiseLite.new()
 	continent_noise.seed = planet_seed
 	continent_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -220,7 +220,7 @@ func generate_world_texture():
 	continent_noise.fractal_octaves = 5
 	continent_noise.fractal_lacunarity = 2.0
 	continent_noise.fractal_gain = 0.55
-	
+
 	var mountain_noise = FastNoiseLite.new()
 	mountain_noise.seed = planet_seed + 1234 # so it is not same seed as continents
 	mountain_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -228,41 +228,36 @@ func generate_world_texture():
 	mountain_noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	mountain_noise.fractal_octaves = 4
 	mountain_noise.fractal_gain = 0.6
-	
-	for y in range(2048):
-		for x in range(2048):
-			var u = float(x) / 2048.0
-			var v = float(y) / 2048.0
-			
-			var phi = (u * 2.0 * PI) - PI
-			var theta = (v * PI) - (PI / 2.0)
-			
-			var sphere_point = (Vector3(cos(theta) * cos(phi), sin(theta), cos(theta) * sin(phi))) * 150.0
-			var continent_value = (continent_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
-			
-			var final_height = 0.0
-			var sea_level = 0.46
-			
-			if continent_value < sea_level:
-				var ocean_ratio = continent_value / sea_level
-				final_height = lerp(0.1, 0.40, ocean_ratio)
-			else:
-				var land_progress = (continent_value - sea_level) / (1.0 - sea_level)
-				var coastal_profile = (mountain_noise.get_noise_3dv(sphere_point * 0.3) + 1.0) * 0.5
-				var shoreline_start = lerp(0.40, 0.44, coastal_profile)
-				var land_elevation = shoreline_start + (land_progress * 0.2)
-				var mountain_mask = smoothstep(0.52, 0.62, continent_value)
-				var mountain_value = (mountain_noise.get_noise_3dv(sphere_point * 1.5) + 1.0) * 0.5
-				mountain_value = pow(mountain_value, 1.8)
-				var headroom = 1.0 - land_elevation
-				var allowed_mountain_height = mountain_value * headroom * mountain_mask * 0.96
-				final_height = land_elevation + allowed_mountain_height
-			
-			final_height = clamp(final_height, 0.0, 1.0)
-			
-			terrain_data.set_height(x, y, final_height)
-			#world_image.set_pixel(x, y, Color(final_height, 1.0 if final_height < sea_level else 0.0, 0.0, 1.0))
-	
+
+	for face in range(6):
+		for y in range(terrain_face_size):
+			for x in range(terrain_face_size):
+				var sphere_point = terrain_data.pixel_to_dir(face, x, y) * 150.0
+				var continent_value = (continent_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
+
+				var final_height = 0.0
+				var sea_level = 0.46
+
+				if continent_value < sea_level:
+					var ocean_ratio = continent_value / sea_level
+					final_height = lerp(0.1, 0.40, ocean_ratio)
+				else:
+					var land_progress = (continent_value - sea_level) / (1.0 - sea_level)
+					var coastal_profile = (mountain_noise.get_noise_3dv(sphere_point * 0.3) + 1.0) * 0.5
+					var shoreline_start = lerp(0.40, 0.44, coastal_profile)
+					var land_elevation = shoreline_start + (land_progress * 0.2)
+					var mountain_mask = smoothstep(0.52, 0.62, continent_value)
+					var mountain_value = (mountain_noise.get_noise_3dv(sphere_point * 1.5) + 1.0) * 0.5
+					mountain_value = pow(mountain_value, 1.8)
+					var headroom = 1.0 - land_elevation
+					var allowed_mountain_height = mountain_value * headroom * mountain_mask * 0.96
+					final_height = land_elevation + allowed_mountain_height
+
+				final_height = clamp(final_height, 0.0, 1.0)
+
+				terrain_data.set_height(face, x, y, final_height)
+				#world_image.set_pixel(x, y, Color(final_height, 1.0 if final_height < sea_level else 0.0, 0.0, 1.0))
+
 	var preview = terrain_data.to_image()
 	preview.save_png("res://test/terrain.png")
 	world_texture = ImageTexture.create_from_image(preview)
@@ -285,12 +280,12 @@ func update_orbit_speed():
 
 func set_time_hours(target_hours: float):
 	var hours = wrapf(target_hours, 0.0, 24.0)
-	
+
 	var planet_up = get_true_position().normalized() # Have to change that later, but for now it works
 	var plane_equator = planet_up.slide(Vector3.DOWN).normalized() #Vector3.DOWN is northpole
 	var plane_longitude = atan2(plane_equator.z, plane_equator.x)
 	sun_orbit_angle = ((hours - 12.0) / 24.0) * TAU + plane_longitude
-	
+
 	update_sun_position()
 
 func set_time_speed(multiplier: float):
