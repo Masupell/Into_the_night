@@ -1,1 +1,7 @@
 python3 -m venv tools/.venv && tools/.venv/bin/pip install -r tools/requirements.txt
+
+run convert_etopt.py
+
+run tools/.venv/bin/python tools/bake_tiles.py data/etopo_60s data/earth_tiles --max-level 6
+
+Currently crashes without earth_tiles.bin, so necessary

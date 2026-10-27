@@ -14,7 +14,7 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
-@export var terrain_max_tile_level: int = 6 # 2^6 * 128 + 1 = 8193 pixels per face edge, ETOPO 60s has 5400 per face (90 degrees)
+@export var terrain_max_tile_level: int = 6 # 2^6 * 128 + 1 = 8193 pixels per face edge, ETOPO 60s has 5400 per face (90 degrees). Baked tiles bring their own
 @export var terrain_tile_size: int = 129 # Pixels per tile edge
 @export var earth_meters_per_unit: float = 8849.0 # Real meters that become max_height, Everest = max_height
 
@@ -76,7 +76,8 @@ func _ready() -> void:
 	planet_seed = randi()
 	#generate_world_texture()
 	#world_from_texture()
-	world_from_etopo()
+	#world_from_etopo()
+	world_from_baked_tiles()
 
 	detail_noise.seed = planet_seed + 4321
 	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -212,6 +213,11 @@ func world_from_texture():
 
 func world_from_etopo():
 	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EtopoSource.new("res://data/etopo_60s", earth_meters_per_unit))
+
+# Tiles baked with tools/bake_tiles.py, level count and tile size come from the baked data
+func world_from_baked_tiles():
+	var source := DiskSource.new("res://data/earth_tiles", earth_meters_per_unit)
+	terrain_data = TerrainData.new(source.max_level, source.tile_size, source)
 
 func generate_world_texture():
 	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, NoiseSource.new(planet_seed))
