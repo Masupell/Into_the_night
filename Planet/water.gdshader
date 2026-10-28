@@ -20,7 +20,7 @@ void fragment()
     float depth_factor = 1.0 - exp(-depth_difference / depth_scale);
 
     vec3 final_color = mix(color_shallow, color_deep, depth_factor);
-    float final_alpha = mix(0.35, 1.0, depth_factor);
+    float final_alpha = mix(0.75, 1.0, depth_factor);
 
     ALBEDO = final_color;
     ALPHA = final_alpha;
