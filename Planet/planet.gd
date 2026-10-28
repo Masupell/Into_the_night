@@ -17,6 +17,9 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
+@export var collision_radius: float = 300.0 # chunks this close to the player get a collider, lose it again at 1.5x
+@export var collider_budget_ms: float = 2.0 # time per frame for making colliders, nearest first, the rest waits for the next frames
+@export var collider_always_distance: float = 50.0 # closer than this a collider is made right away, even over the budget
 @export var min_vertex_spacing: float = 1.0 # meters, chunks don't split further than this, the data has no finer detail anyway
 var lod_level_limit: int # max_lod_level, or lower if vertices would get closer than min_vertex_spacing
 @export var terrain_max_tile_level: int = 6 # 2^6 * 128 + 1 = 8193 pixels per face edge, ETOPO 60s has 5400 per face (90 degrees). Baked tiles bring their own
@@ -159,6 +162,7 @@ func _process(delta: float) -> void:
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
 	for q in root_quads:
 		q.update_lod(cam_pos, frustum_planes)
+	update_colliders()
 
 	sun_orbit_angle += orbit_speed * delta
 	update_sun_position()
@@ -207,6 +211,35 @@ func update_camera_planes():
 		var clearance := dist - (radius + max_height)
 		near = maxf(near, clearance * near_per_clearance)
 	camera.near = near
+
+# Colliders for the shown chunks near the player. Distance to the chunk's real height range (ocean floor up to the water
+# surface under water), not its bounding box: that reaches from the ocean floor to the highest mountain and on a slope
+# of the planet is hundreds of meters wide, then everything nearby counted as distance 0.
+# Made nearest first within collider_budget_ms per frame, so arriving fast at the ground doesn't make them all in one frame.
+# Only shown chunks: hidden ones (finished children waiting for their siblings, coarse ones about to be replaced)
+# would contain the player just as much and use up the budget
+func update_colliders():
+	var player := get_true_position()
+	var wanted := [] # [center distance, surface distance, chunk]
+	for chunk: Chunk in chunk_container.get_children():
+		if not chunk.is_ready or chunk.owner_quad == null or chunk.is_pending_recycle:
+			continue
+		var distance := chunk.owner_quad.surface_distance(player)
+		if chunk.collider == null or chunk.collider_outdated:
+			if distance < collision_radius and chunk.visible:
+				# ordered by the center: the surface distance is 0 for every chunk the player is above or next to,
+				# the one right under the player has the closest center
+				wanted.append([chunk.owner_quad.center_distance(player), distance, chunk])
+		elif distance > collision_radius * 1.5: # a bit further than added, so they don't flicker on and off at the edge
+			chunk.remove_collider()
+
+	wanted.sort_custom(func(a, b): return a[0] < b[0])
+	var start := Time.get_ticks_usec()
+	var budget_usec := collider_budget_ms * 1000.0
+	for entry in wanted:
+		if Time.get_ticks_usec() - start > budget_usec and entry[1] > collider_always_distance:
+			continue
+		entry[2].build_collider()
 
 # Vertices per chunk edge, bigger chunks get more so the curvature stays smooth
 func grid_size_for_level(level: int) -> int:

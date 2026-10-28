@@ -18,6 +18,12 @@ var owner_quad: Quad = null
 
 var planet: Planet # Easier with reference right now
 
+# Collider: triangles come from the worker with every build, the body itself is made later by Planet.update_colliders,
+# only near the player and a few per frame (adding one to the physics world is the expensive part)
+var collision_faces: PackedVector3Array
+var collider: StaticBody3D = null
+var collider_outdated: bool = false # mesh was rebuilt, the old collider stays until the new one is made
+
 # Mesh vertices are relative to this point (planet space, double precision), so they stay small and precise.
 # The chunk node sits at center - camera position, computed in doubles, see Planet.shift_origin
 var center: PackedFloat64Array
@@ -60,10 +66,26 @@ func completely_reset_and_return():
 	center = PackedFloat64Array()
 	if water_mesh_instance:
 		water_mesh_instance.mesh = null
-	for child in get_children():
-		if child is StaticBody3D:
-			child.queue_free()
+	remove_collider()
+	collision_faces = PackedVector3Array()
 	planet.return_chunk(self)
+
+func build_collider():
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(collision_faces)
+	var collision_shape := CollisionShape3D.new()
+	collision_shape.shape = shape
+	var body := StaticBody3D.new()
+	body.add_child(collision_shape)
+	remove_collider()
+	add_child(body)
+	collider = body
+
+func remove_collider():
+	if collider:
+		collider.queue_free()
+		collider = null
+	collider_outdated = false
 
 
 func update_position():
@@ -89,17 +111,9 @@ func apply_generation_results(total_data: Dictionary):
 	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data)
 	self.mesh = terrain_mesh
 
-	for child in get_children():
-		if child is StaticBody3D:
-			child.queue_free()
-
-	if total_data["needs_collision"]:
-		var static_body := StaticBody3D.new()
-		add_child(static_body)
-
-		var collision_shape := CollisionShape3D.new()
-		collision_shape.shape = terrain_mesh.create_trimesh_shape()
-		static_body.add_child(collision_shape)
+	collision_faces = total_data["collision_faces"]
+	if collider:
+		collider_outdated = true
 
 	self.material_override = planet.terrain_material
 
@@ -121,13 +135,13 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, needs_collision: bool, skirt_depth: float):
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float):
 	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, terrain_center, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
 	var total_data = {
 		"gen_id": gen_id,
 		"center": terrain_center,
-		"needs_collision": needs_collision,
 		"terrain": data["mesh_array"],
+		"collision_faces": data["collision_faces"],
 		"water": data["water_data"],
 		"surface_range": data["surface_range"]
 	}
@@ -371,8 +385,15 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 	var water_data = calculate_water_mesh(grid_size, radius, terrain_center, min_chunk_height, sphere_points_cache)
 
+	# Triangles for the collider, 3 vertices each (what create_trimesh_shape would make, but here on the worker)
+	var collision_faces := PackedVector3Array()
+	collision_faces.resize(indices.size())
+	for i in range(indices.size()):
+		collision_faces[i] = vertices[indices[i]]
+
 	return {
 		"mesh_array": mesh_array,
+		"collision_faces": collision_faces,
 		"water_data": water_data,
 		"surface_range": Vector2(min_surface, max_surface)
 	}

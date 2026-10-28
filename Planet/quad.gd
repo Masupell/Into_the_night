@@ -17,7 +17,7 @@ const FRUSTUM_INSIDE = 2
 
 var frustum_state = FRUSTUM_INTERSECT
 var bounding_aabb: AABB # sea level up to max_height, for culling while the camera is above water
-var bounding_aabb_deep: AABB # also down to the ocean floor, for culling under water and for colliders
+var bounding_aabb_deep: AABB # also down to the ocean floor, for culling under water
 # Both boxes as center + half size, and the frustum margin, precomputed for test_frustum
 var aabb_center: Vector3
 var aabb_extents: Vector3
@@ -27,6 +27,7 @@ var aabb_deep_extents: Vector3
 var aabb_deep_margin: float
 var bounding_center: Vector3
 var surface_dir: Vector3 # unit direction of the quad center, for the LOD distance
+var half_diagonal: float # center to corner on the surface, meters
 # Visible surface heights in meters above the radius (ground, or the water at 0), for the LOD distance.
 # From the last own chunk mesh, until then inherited from the parent (whole possible range at the roots)
 var surface_min: float
@@ -79,10 +80,7 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array, ancestor_has_chunk: 
 			hide_subtree()
 		return true
 
-	# Nearest point of the quad centers height range, camera height clamped into it
-	var cam_height := camera_pos.dot(surface_dir) - planet.radius
-	var surface_point := surface_dir * (planet.radius + clampf(cam_height, surface_min, surface_max))
-	var dist_to_cam = camera_pos.distance_to(surface_point)
+	var dist_to_cam := center_distance(camera_pos)
 
 	if level < planet.lod_level_limit and dist_to_cam < planet.split_distances[level]:
 		if children.is_empty():
@@ -116,6 +114,15 @@ func hide_subtree():
 	remove_chunk()
 	for child in children:
 		child.hide_subtree()
+
+# Distance to the nearest point of the quad centers height range (the position's height clamped into it)
+func center_distance(pos: Vector3) -> float:
+	var height := pos.dot(surface_dir) - planet.radius
+	return pos.distance_to(surface_dir * (planet.radius + clampf(height, surface_min, surface_max)))
+
+# Roughly the distance to the nearest point of the surface: center distance minus half the quad's width (0 when above it)
+func surface_distance(pos: Vector3) -> float:
+	return maxf(0.0, center_distance(pos) - half_diagonal)
 
 # min/max of the chunks mesh heights (x, y). Where the ground is under water, the water surface at 0 is visible too
 func set_surface_range(height_range: Vector2):
@@ -321,17 +328,12 @@ func draw_chunk():
 	var stitch_e = e_nb != null and e_nb.level < level
 	var stitch_w = w_nb != null and w_nb.level < level
 
-	# distance to the bounds, not a point above sea level, so deep ocean floor chunks get colliders too
-	var player_pos := planet.get_true_position()
-	var dist_to_player := player_pos.distance_squared_to(player_pos.clamp(bounding_aabb_deep.position, bounding_aabb_deep.end))
-	var needs_collision := dist_to_player < 90000.0
-
 	#if level > highest_lod:
 		#highest_lod = level
 		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, " ", chunk_world_size)
 
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision, planet.max_height * 0.05))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, planet.max_height * 0.05))
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
@@ -361,6 +363,7 @@ func calculate_bounds():
 	var center_dir = surface_center.normalized()
 	surface_dir = center_dir
 	var corner_dir = CubeSphere.spherify(corners[0]).normalized()
+	half_diagonal = surface_center.distance_to(corner_dir * planet.radius)
 	horizon_cos_alpha = center_dir.dot(corner_dir)
 	horizon_sin_alpha = sqrt(maxf(0.0, 1.0 - horizon_cos_alpha * horizon_cos_alpha))
 
