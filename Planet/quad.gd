@@ -286,6 +286,14 @@ func remove_subtree():
 		child.remove_subtree()
 	children.clear()
 
+# Quitting: parent and children reference each other, so the tree would never be freed by itself (leaks at exit)
+func release_tree():
+	for child in children:
+		child.release_tree()
+	children.clear()
+	parent_quad = null
+	chunk = null
+
 func remove_chunk():
 	if chunk:
 		#chunk.generation_id += 1

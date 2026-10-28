@@ -8,6 +8,7 @@ var water_mesh_instance: MeshInstance3D
 
 var active_task_id: int = -1
 var generation_id: int = 1
+var task_result: Dictionary = {} # written by the worker task, only read on the main thread once that task is finished
 
 var is_pending_recycle: bool = false
 var is_ready: bool = false
@@ -28,16 +29,24 @@ var collider_outdated: bool = false # mesh was rebuilt, the old collider stays u
 # The chunk node sits at center - camera position, computed in doubles, see Planet.shift_origin
 var center: PackedFloat64Array
 
-func _process(_delta: float) -> void:
+# Called by the planet every frame before the LOD update, so a finished chunk is used in the same frame.
+# The result is picked up here instead of call_deferred from the worker: a deferred call to a chunk that got freed
+# in between (quitting) is an error
+func poll_task() -> void:
 	if active_task_id != -1:
 		if WorkerThreadPool.is_task_completed(active_task_id):
 			WorkerThreadPool.wait_for_task_completion(active_task_id)
 			active_task_id = -1
+			var result := task_result
+			task_result = {}
 
 			if is_pending_recycle:
 				is_pending_recycle = false
 				completely_reset_and_return()
-			elif redraw_requested:
+				return
+			if not result.is_empty():
+				apply_generation_results(result)
+			if redraw_requested:
 				redraw_requested = false
 				if owner_quad:
 					owner_quad.draw_chunk()
@@ -145,7 +154,7 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 		"water": data["water_data"],
 		"surface_range": data["surface_range"]
 	}
-	chunk_instance.apply_generation_results.call_deferred(total_data)
+	chunk_instance.task_result = total_data
 
 static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
 	var mesh_array = []

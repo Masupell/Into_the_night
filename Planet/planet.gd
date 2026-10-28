@@ -150,6 +150,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	terrain_data.update()
+	for chunk: Chunk in chunk_container.get_children():
+		chunk.poll_task()
 
 	if not camera:
 		camera = get_viewport().get_camera_3d()
@@ -175,6 +177,17 @@ func _process(delta: float) -> void:
 	var mat = atmosphere.material_override as ShaderMaterial
 	if mat:
 		mat.set_shader_parameter("sun_dir", sun_dir)
+
+# Quitting: tasks still running would write into chunks and tiles that are being freed, wait for all of them first
+func _exit_tree() -> void:
+	for chunk: Chunk in chunk_container.get_children():
+		if chunk.active_task_id != -1:
+			WorkerThreadPool.wait_for_task_completion(chunk.active_task_id)
+			chunk.active_task_id = -1
+	terrain_data.wait_for_loading()
+	for q in root_quads:
+		q.release_tree()
+	root_quads.clear()
 
 func compute_lod_thresholds():
 	split_distances.resize(max_lod_level + 1)

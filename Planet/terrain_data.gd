@@ -36,6 +36,12 @@ func request_tile(key: Vector4i):
 	var task_id := WorkerThreadPool.add_task(source.fill_tile.bind(tile))
 	loading[key] = [tile, task_id]
 
+# Blocks until all tiles that are loading are done (when quitting)
+func wait_for_loading():
+	for entry in loading.values():
+		WorkerThreadPool.wait_for_task_completion(entry[1])
+	loading.clear()
+
 func update():
 	var now := Time.get_ticks_msec()
 
