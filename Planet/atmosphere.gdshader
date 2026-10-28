@@ -1,16 +1,42 @@
 shader_type spatial;
-render_mode cull_front, unshaded, blend_mix, depth_test_disabled, skip_vertex_transform;
+render_mode cull_front, unshaded, blend_premul_alpha, depth_test_disabled, skip_vertex_transform;
+
+// Single scattering: along the view ray, sunlight reaches each point dimmed by the air it went through on the way
+// (blue is scattered much more than red, so a long way through the air leaves it red: sunsets), is scattered
+// towards the camera there, and dimmed again on the way to the camera.
+// Rayleigh (small molecules): blue sky, scatters forward and backward alike.
+// Mie (haze, dust): grey, scatters mostly forward, the bright glow around the sun.
 
 uniform float planet_radius;
 uniform float atmosphere_radius;
 uniform vec3 sun_dir;
-uniform float atmosphere_density_mult : hint_range(0.1, 5.0) = 1.5;
 uniform float max_draw_distance = 10000.0; // set from the cameras far plane, see Planet.update_camera_planes
+
+// How much light goes missing straight up from sea level to space, per color (Earth: about 0.05, 0.12, 0.29).
+// Higher = deeper blue, but also more haze seen from space and a reddish horizon (long way through the air to the camera)
+uniform vec3 rayleigh_depth = vec3(0.05, 0.12, 0.29);
+// Extra air only on the sunlight's way to each point, not on the way to the camera: the planet is small, so near
+// the horizon the sunlight goes through much less air than on Earth (~10x the way straight up instead of ~38x),
+// sunsets wouldn't get red without it
+uniform float sun_reddening = 4.0;
+// Ozone only absorbs, mostly green-orange, and only counted on the sunlight's way. It is what keeps the sky blue at dusk
+// instead of olive (Earth: ~0.01, 0.028, 0.0013, here 2x because it is spread like the air instead of a layer up high)
+uniform vec3 ozone_depth = vec3(0.02, 0.056, 0.0026);
+// Reddish sunlight (dawn, dusk) only shows its color towards the sun, away from it it keeps its brightness but gets grey.
+// On Earth there is a pink band opposite the sun at dusk, 0 keeps it
+uniform float away_desaturation : hint_range(0.0, 1.0) = 0.85;
+uniform float mie_depth = 0.02;
+uniform float mie_g : hint_range(0.0, 0.99) = 0.76; // how strongly haze scatters forward (glow size around the sun)
+uniform float sun_intensity = 22.0;
+// Seen from above the atmosphere, the haze lies over the sunlit ground instead of black space and would look milky,
+// so it gets darker the further up the camera is (full brightness up to 30% of the atmosphere, this from its top on)
+uniform float space_brightness : hint_range(0.0, 1.0) = 0.4;
 
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
 
-const int SAMPLE_COUNT = 12; // 6 seems fine as well though
-const float DENSITY_FALLOFF = 4.5;
+const int SAMPLE_COUNT = 12;
+const float DENSITY_FALLOFF = 4.5; // atmosphere thickness / scale height of the air (density 1/e every scale height)
+const float MIE_SCALE = 0.2; // haze stays lower than the air
 
 vec2 ray_sphere_intersect(vec3 ray_origin, vec3 ray_dir_vector, vec3 sphere_center, float sphere_radius)
 {
@@ -23,6 +49,20 @@ vec2 ray_sphere_intersect(vec3 ray_origin, vec3 ray_dir_vector, vec3 sphere_cent
 
 	float sqrt_d = sqrt(d);
 	return vec2(-b - sqrt_d, -b + sqrt_d);
+}
+
+// Air between a point and space in one direction, in scale heights times the density at the ground
+// (straight up from sea level it is 1). Chapman function approximation (C. Schueler, GPU Pro 3), works down to
+// the horizon and a bit below it. x: planet radius / scale height, h: height / scale height, cos_zenith of the direction
+float chapman(float x, float h, float cos_zenith)
+{
+	float c = sqrt(x + h);
+	if (cos_zenith >= 0.0) {
+		return c / (c * cos_zenith + 1.0) * exp(-h);
+	}
+	float x0 = sqrt(1.0 - cos_zenith * cos_zenith) * (x + h);
+	float c0 = sqrt(x0);
+	return 2.0 * c0 * exp(min(x - x0, 30.0)) - c / (1.0 - c * cos_zenith) * exp(-h);
 }
 
 // The back faces (far side of the sphere, behind the planet) can be further away than the far plane.
@@ -62,55 +102,64 @@ void fragment()
 	float path_length = ray_end - ray_start;
 	if (path_length <= 0.0) discard;
 
+	float thickness = max(1.0, atmosphere_radius - planet_radius);
+	float rayleigh_height = thickness / DENSITY_FALLOFF;
+	float mie_height = rayleigh_height * MIE_SCALE;
+	// scattering per meter at sea level, so that straight up adds up to rayleigh_depth / mie_depth
+	float rayleigh_column = rayleigh_height * (1.0 - exp(-thickness / rayleigh_height));
+	vec3 rayleigh_coeff = rayleigh_depth / rayleigh_column;
+	vec3 sun_extinction = (rayleigh_depth * sun_reddening + ozone_depth) / rayleigh_column; // on the sunlight's way only
+	float mie_coeff = mie_depth / (mie_height * (1.0 - exp(-thickness / mie_height)));
+
+	// how much of the light is scattered from the sun towards the camera (phase functions)
+	float cos_angle = dot(ray_dir, sun_dir);
+	float rayleigh_phase = 3.0 / (16.0 * PI) * (1.0 + cos_angle * cos_angle);
+	float g2 = mie_g * mie_g;
+	float mie_phase = (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * mie_g * cos_angle, 1.5));
+
+	// how much of the sunlight's color is kept, full towards the sun
+	float color_keep = mix(1.0 - away_desaturation, 1.0, smoothstep(-0.2, 0.7, cos_angle));
+
 	float step_size = path_length / float(SAMPLE_COUNT);
-	float atmos_thickness = max(1.0, atmosphere_radius - planet_radius);
-	float step_factor = step_size / atmos_thickness;
-
-	float view_sun_dot = dot(ray_dir, sun_dir);
-	float forward_scatter = pow(max(0.0, view_sun_dot), 6.0) * 2.5;
-
-	vec3 scattered_blue = vec3(0.1, 0.45, 0.95);
-	vec3 sunset_red = vec3(1.0, 0.35, 0.05);
-
-	vec3 accumulated_light = vec3(0.0);
-	float accumulated_density = 0.0;
+	vec3 view_depth = vec3(0.0); // air between the camera and the current sample, as optical depth per color
+	vec3 light = vec3(0.0);
 
 	for (int i = 0; i < SAMPLE_COUNT; i++)
 	{
-	    float t = ray_start + (float(i) + 0.5) * step_size;
-	    vec3 sample_pos = ray_origin + ray_dir * t;
+		vec3 sample_pos = ray_origin + ray_dir * (ray_start + (float(i) + 0.5) * step_size);
+		vec3 to_sample = sample_pos - planet_center;
+		float sample_radius = length(to_sample);
+		float height = max(0.0, sample_radius - planet_radius);
 
-	    float current_height = length(sample_pos - planet_center) - planet_radius;
-	    float height_factor = clamp(current_height / atmos_thickness, 0.0, 1.0);
+		float rayleigh_density = exp(-height / rayleigh_height);
+		float mie_density = exp(-height / mie_height);
+		vec3 extinction = rayleigh_coeff * rayleigh_density + mie_coeff * mie_density * 1.1; // haze also absorbs a bit
+		vec3 view_transmittance = exp(-(view_depth + extinction * step_size * 0.5));
+		view_depth += extinction * step_size;
 
-	    float density = exp(-height_factor * DENSITY_FALLOFF) * pow(1.0 - height_factor, 2.0) * step_factor;
+		// in the planet's shadow no sunlight arrives at all
+		vec2 shadow = ray_sphere_intersect(sample_pos, sun_dir, planet_center, planet_radius);
+		if (shadow.x > 0.0) continue;
 
-	    vec3 surface_normal = normalize(sample_pos - planet_center);
-	    float sun_angle = dot(surface_normal, sun_dir);
-	    float light_intensity = smoothstep(-0.15, 0.25, sun_angle);
+		// sunlight that is left after its way through the air to this point
+		float cos_zenith = dot(to_sample / sample_radius, sun_dir);
+		vec3 sun_depth = sun_extinction * rayleigh_height * chapman(planet_radius / rayleigh_height, height / rayleigh_height, cos_zenith)
+			+ mie_coeff * 1.1 * mie_height * chapman(planet_radius / mie_height, height / mie_height, cos_zenith);
+		vec3 sun_transmittance = exp(-sun_depth);
+		float brightness = dot(sun_transmittance, vec3(0.2126, 0.7152, 0.0722));
+		sun_transmittance = mix(vec3(brightness), sun_transmittance, color_keep);
 
-	    if (light_intensity > 0.0)
-	    {
-	        vec2 shadow_check = ray_sphere_intersect(sample_pos, sun_dir, planet_center, planet_radius);
-	        if (shadow_check.x > 0.0)
-	        {
-	            light_intensity = 0.0;
-	        }
-	    }
-
-	    float sunset_factor = smoothstep(0.3, -0.1, sun_angle);
-	    vec3 current_air_color = mix(scattered_blue, sunset_red, sunset_factor);
-	    current_air_color += sunset_red * sunset_factor * forward_scatter;
-
-	    accumulated_light += current_air_color * density * light_intensity;
-	    accumulated_density += density;
+		vec3 scattering = rayleigh_coeff * rayleigh_density * rayleigh_phase + mie_coeff * mie_density * mie_phase;
+		light += scattering * sun_transmittance * view_transmittance * step_size;
 	}
 
-	if (accumulated_density <= 0.0001) discard;
+	float camera_height = length(ray_origin - planet_center) - planet_radius;
+	light *= sun_intensity * mix(1.0, space_brightness, smoothstep(0.3 * thickness, thickness, camera_height));
+	vec3 transmittance = exp(-view_depth);
+	float alpha = 1.0 - (transmittance.r + transmittance.g + transmittance.b) / 3.0;
+	if (alpha < 0.0001 && max(light.r, max(light.g, light.b)) < 0.0001) discard;
 
-	vec3 final_color = accumulated_light / accumulated_density;
-	float alpha = 1.0 - exp(-accumulated_density * atmosphere_density_mult);
-
-	ALBEDO = final_color;
+	// premultiplied: the result is light + what is behind * (1 - alpha), the terrain behind gets dimmed by the air
+	ALBEDO = light;
 	ALPHA = alpha;
 }
