@@ -18,6 +18,13 @@ const FRUSTUM_INSIDE = 2
 var frustum_state = FRUSTUM_INTERSECT
 var bounding_aabb: AABB # sea level up to max_height, for culling while the camera is above water
 var bounding_aabb_deep: AABB # also down to the ocean floor, for culling under water and for colliders
+# Both boxes as center + half size, and the frustum margin, precomputed for test_frustum
+var aabb_center: Vector3
+var aabb_extents: Vector3
+var aabb_margin: float
+var aabb_deep_center: Vector3
+var aabb_deep_extents: Vector3
+var aabb_deep_margin: float
 var bounding_center: Vector3
 var surface_dir: Vector3 # unit direction of the quad center, for the LOD distance
 # Visible surface heights in meters above the radius (ground, or the water at 0), for the LOD distance.
@@ -46,26 +53,31 @@ func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, 
 	if _parent:
 		surface_min = _parent.surface_min
 		surface_max = _parent.surface_max
+		currently_visible = _parent.currently_visible # a neighbour can split this one while it's out of view, then it isn't visited
 	else:
 		surface_min = planet.min_terrain_radius - planet.radius
 		surface_max = planet.max_height
 	calculate_bounds()
 
-func update_lod(camera_pos: Vector3, frustum_planes: Array):
+# Returns true when what this quad shows is ready: its own chunk, or (when split) all visible children are ready.
+# ancestor_has_chunk: some quad above still has a chunk, then this one's chunk stays hidden until that one is gone
+func update_lod(camera_pos: Vector3, frustum_planes: Array, ancestor_has_chunk: bool = false) -> bool:
 	if parent_quad and parent_quad.frustum_state == FRUSTUM_INSIDE:
 		frustum_state = FRUSTUM_INSIDE
 	elif not frustum_planes.is_empty():
 		var under_water: bool = camera_pos.length() < planet.radius
-		frustum_state = test_frustum(frustum_planes, bounding_aabb_deep if under_water else bounding_aabb)
+		frustum_state = test_frustum(frustum_planes, under_water)
 	else:
 		frustum_state = FRUSTUM_INTERSECT
 
+	var was_visible := currently_visible
 	currently_visible = is_above_horizon(camera_pos) and frustum_state != FRUSTUM_OUTSIDE
 	if not currently_visible:
-		remove_chunk()
-		for child in children:
-			child.update_lod(camera_pos, frustum_planes)
-		return
+		# Everything below is out of view as well. Cleaned up once when this quad goes out of view,
+		# after that the subtree isn't visited at all until this quad is visible again
+		if was_visible:
+			hide_subtree()
+		return true
 
 	# Nearest point of the quad centers height range, camera height clamped into it
 	var cam_height := camera_pos.dot(surface_dir) - planet.radius
@@ -75,20 +87,35 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 	if level < planet.lod_level_limit and dist_to_cam < planet.split_distances[level]:
 		if children.is_empty():
 			split()
+		var children_ready := true
 		for child in children:
-			child.update_lod(camera_pos, frustum_planes)
-		if are_children_ready():
+			if not child.update_lod(camera_pos, frustum_planes, ancestor_has_chunk or chunk != null):
+				children_ready = false
+		if children_ready:
 			reveal_leaves()
 			remove_chunk()
-	else:
-		if chunk == null:
-			draw_chunk()
-		if chunk != null and chunk.is_ready:
-			if not children.is_empty():
-				chunk.visible = true
-				merge()
-			elif not chunk.visible and not has_active_ancestor_chunk():
-				chunk.visible = true
+		return children_ready
+
+	if chunk == null:
+		draw_chunk()
+	if chunk != null and chunk.is_ready:
+		if not children.is_empty():
+			chunk.visible = true
+			merge()
+		elif not chunk.visible and not ancestor_has_chunk:
+			chunk.visible = true
+		return true
+	# Waiting to merge, the old children are still what is shown
+	if not children.is_empty():
+		return are_children_ready()
+	return false
+
+# Out of view: no chunks anywhere below, all marked hidden (the parent doesn't wait for hidden quads)
+func hide_subtree():
+	currently_visible = false
+	remove_chunk()
+	for child in children:
+		child.hide_subtree()
 
 # min/max of the chunks mesh heights (x, y). Where the ground is under water, the water surface at 0 is visible too
 func set_surface_range(height_range: Vector2):
@@ -108,27 +135,20 @@ func are_children_ready() -> bool:
 			return false
 	return true
 
-func test_frustum(frustum_planes: Array, aabb: AABB) -> int:
+# Frustum planes point outwards (distance > 0 is outside). Box as center + half size:
+# the corner furthest inside is distance - r, the one furthest outside distance + r, with r = extents projected on the normal
+func test_frustum(frustum_planes: Array, under_water: bool) -> int:
+	var center := aabb_deep_center if under_water else aabb_center
+	var extents := aabb_deep_extents if under_water else aabb_extents
+	var margin := aabb_deep_margin if under_water else aabb_margin
 	var fully_inside_count := 0
-	var aabb_min = aabb.position
-	var aabb_max = aabb.end
-	var margin: float = aabb.size.length() * 0.15
 
-	for plane in frustum_planes:
-		var n_vertex = Vector3(
-			aabb_min.x if plane.normal.x >= 0.0 else aabb_max.x,
-			aabb_min.y if plane.normal.y >= 0.0 else aabb_max.y,
-			aabb_min.z if plane.normal.z >= 0.0 else aabb_max.z
-		)
-		if plane.distance_to(n_vertex) > margin:
+	for plane: Plane in frustum_planes:
+		var distance := plane.distance_to(center)
+		var r := extents.dot(plane.normal.abs())
+		if distance - r > margin:
 			return FRUSTUM_OUTSIDE
-
-		var p_vertex = Vector3(
-			aabb_max.x if plane.normal.x >= 0.0 else aabb_min.x,
-			aabb_max.y if plane.normal.y >= 0.0 else aabb_min.y,
-			aabb_max.z if plane.normal.z >= 0.0 else aabb_min.z
-		)
-		if plane.distance_to(p_vertex) <= 0.0:
+		if distance + r <= 0.0:
 			fully_inside_count += 1
 
 	if fully_inside_count == frustum_planes.size():
@@ -315,14 +335,6 @@ func draw_chunk():
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
-func has_active_ancestor_chunk() -> bool:
-	var p = parent_quad
-	while p != null:
-		if p.chunk != null:
-			return true
-		p = p.parent_quad
-	return false
-
 func reveal_leaves():
 	if children.is_empty():
 		if chunk:
@@ -376,3 +388,10 @@ func calculate_bounds():
 		deep_max = deep_max.max(max_v).max(ocean_floor)
 	bounding_aabb = (AABB(min_v, max_v - min_v)).grow(5.0) # grow, to give a bit of a buffer around the screen edges
 	bounding_aabb_deep = (AABB(deep_min, deep_max - deep_min)).grow(5.0)
+
+	aabb_center = bounding_aabb.get_center()
+	aabb_extents = bounding_aabb.size * 0.5
+	aabb_margin = bounding_aabb.size.length() * 0.15 # a bit outside still counts as inside
+	aabb_deep_center = bounding_aabb_deep.get_center()
+	aabb_deep_extents = bounding_aabb_deep.size * 0.5
+	aabb_deep_margin = bounding_aabb_deep.size.length() * 0.15
