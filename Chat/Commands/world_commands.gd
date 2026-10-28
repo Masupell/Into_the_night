@@ -42,7 +42,11 @@ func register_all():
 			}
 	})
 
-	command_processor.register_command_multiple("plane here", self, "Puts the plane in front of the current camera, level and standing still")
+	var plane_command = "plane { here | position <latitude:coord|~> <longitude:coord|~> [<height:coord|~>] }"
+	command_processor.register_command_multiple(plane_command, self, "Puts the plane in front of the current camera (level, standing still), or at a latitude, longitude and height above sea level. ~ is the plane's current value, ~5 relative to it")
+
+	var tp_command = "tp <latitude:coord|~> <longitude:coord|~> [<height:coord|~>]"
+	command_processor.register_command(tp_command, cmd_tp, "Teleports to latitude, longitude (degrees) and height above sea level (meters). ~ is the current value, ~5 relative to it, without height it stays the same")
 
 	var chunk_command = "chunk { border <visible:any|show,hide> | lod <visible:any|show,hide> }" # 1 for visible, 0 for hidden
 	command_processor.register_command_multiple(chunk_command, self, "Different things with the chunks, only for debug right now",
@@ -112,6 +116,34 @@ func cmd_camera(context: CommandContext) -> String:
 				command_processor.console.add_message("[color=green]Switched to debug[/color]")
 		_:
 			return "Invalid Argument. Expected 1/plane, 2/free, or 3/debug."
+	return ""
+
+# Latitude, longitude and height from the arguments, current: the same of the thing that moves (for ~ and missing height)
+# Returns the target position in planet space, or an error text
+func coordinates_from(context: CommandContext, current: Vector3) -> Variant:
+	var latitude := context.get_coordinate("latitude", current.x)
+	var longitude := wrapf(context.get_coordinate("longitude", current.y), -180.0, 180.0)
+	var height := context.get_coordinate("height", current.z)
+	if latitude < -90.0 or latitude > 90.0:
+		return "Latitude has to be between -90 and 90, got %.4f" % latitude
+	return planet.from_lat_lon_height(latitude, longitude, height)
+
+func cmd_tp(context: CommandContext) -> String:
+	var target = coordinates_from(context, planet.to_lat_lon_height(planet.controlled_position()))
+	if target is String:
+		return target
+	planet.teleport_controlled(target)
+	var c := planet.to_lat_lon_height(target)
+	command_processor.console.add_message("[color=green]Teleported to %.4f, %.4f, %.0f m[/color]" % [c.x, c.y, c.z])
+	return ""
+
+func cmd_plane_position(context: CommandContext) -> String:
+	var target = coordinates_from(context, planet.to_lat_lon_height(planet.plane_position()))
+	if target is String:
+		return target
+	planet.teleport_plane(target)
+	var c := planet.to_lat_lon_height(target)
+	command_processor.console.add_message("[color=green]Plane moved to %.4f, %.4f, %.0f m[/color]" % [c.x, c.y, c.z])
 	return ""
 
 func cmd_plane_here(_context: CommandContext) -> String:

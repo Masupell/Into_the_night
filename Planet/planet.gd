@@ -414,6 +414,74 @@ func switch_to_free(debug: bool = false):
 	flight_hud.visible = false
 	camera_mode = free_cam.set_debug_mode(false)
 
+# --- Coordinates ---
+# Latitude / longitude in degrees, the same mapping as the earth data (EquirectSource.get_uv): north pole at -Y,
+# longitude 0 along +X, growing towards +Z. Height in meters above sea level (the planet radius)
+
+# Planet space position -> Vector3(latitude, longitude, height)
+func to_lat_lon_height(pos: Vector3) -> Vector3:
+	var dist := pos.length()
+	if dist < 0.001:
+		return Vector3(0.0, 0.0, -radius)
+	var n := pos / dist
+	return Vector3(rad_to_deg(-asin(clampf(n.y, -1.0, 1.0))), rad_to_deg(atan2(n.z, n.x)), dist - radius)
+
+func from_lat_lon_height(latitude: float, longitude: float, height: float) -> Vector3:
+	var lat := deg_to_rad(latitude)
+	var lon := deg_to_rad(longitude)
+	return Vector3(cos(lat) * cos(lon), -sin(lat), cos(lat) * sin(lon)) * (radius + height)
+
+# Planet space position of what the player controls (plane, free cam or debug camera)
+func controlled_position() -> Vector3:
+	if camera_mode == 3:
+		return get_true_position() + free_cam.debug_camera.global_position
+	return get_true_position()
+
+func plane_position() -> Vector3:
+	return plane.global_position - global_position
+
+# Rotation from the ground frame (up, north) at from to the one at to, so things keep their compass heading
+# and their tilt relative to the ground. At the poles north isn't defined, there it's the shortest rotation
+func _turn_between(from: Vector3, to: Vector3) -> Basis:
+	var a := from.normalized()
+	var b := to.normalized()
+	if absf(a.y) < 0.9999 and absf(b.y) < 0.9999:
+		return _ground_frame(b) * _ground_frame(a).inverse()
+	if a.dot(b) < -0.9999: # exactly the other side, any axis along the surface works
+		return Basis(a.cross(Vector3.RIGHT if absf(a.x) < 0.9 else Vector3.UP).normalized(), PI)
+	return Basis(Quaternion(a, b))
+
+# x: east, y: up, z: north (north pole is -Y)
+func _ground_frame(up: Vector3) -> Basis:
+	var north := Vector3.DOWN.slide(up).normalized()
+	return Basis(north.cross(up), up, north)
+
+# Moves what the player controls to a planet space position
+func teleport_controlled(target: Vector3):
+	var current := controlled_position()
+	var turn := _turn_between(current, target)
+	if camera_mode == 3: # only the debug camera
+		var debug_camera: Camera3D = free_cam.debug_camera
+		debug_camera.global_basis = turn * debug_camera.global_basis
+		debug_camera.global_position = target - get_true_position()
+		return
+	if main_mode == 1:
+		plane.global_basis = turn * plane.global_basis
+		plane.pivot.global_basis = turn * plane.pivot.global_basis
+	else:
+		free_cam.main_camera.global_basis = turn * free_cam.main_camera.global_basis
+	shift_origin(target - current) # the main controller stays at the origin, the planet moves
+
+func teleport_plane(target: Vector3):
+	var current := plane_position()
+	var turn := _turn_between(current, target)
+	plane.global_basis = turn * plane.global_basis
+	plane.pivot.global_basis = turn * plane.pivot.global_basis
+	if main_mode == 1:
+		shift_origin(target - current)
+	else:
+		plane.global_position = target - get_true_position()
+
 # Puts the plane in front of the camera that is looked through (free or debug), level with the ground there,
 # pointing where the camera looks, standing still
 func move_plane_to_view():

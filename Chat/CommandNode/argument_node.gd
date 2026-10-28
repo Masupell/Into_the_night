@@ -1,7 +1,7 @@
 class_name ArgumentNode
 extends CommandNode
 
-enum Type { STRING, INT, FLOAT, ANY }
+enum Type { STRING, INT, FLOAT, ANY, COORD }
 
 var arg_type: Type
 var custom_suggestions: Array[String] = []
@@ -30,6 +30,10 @@ func parse(token: String) -> bool:
 			if token.is_valid_int() or token.is_valid_float() or ":" in token:
 				return true
 			return matches_suggestions(token)
+		Type.COORD: # a number, "~" (the current value) or "~number" (relative to it), resolved by CommandContext.get_coordinate
+			if token.begins_with("~"):
+				return token.length() == 1 or token.substr(1).is_valid_float()
+			return token.is_valid_float()
 	return false
 
 func matches_suggestions(token: String) -> bool:

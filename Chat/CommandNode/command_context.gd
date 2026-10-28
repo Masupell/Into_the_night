@@ -22,6 +22,15 @@ func get_int(arg_name: String) -> int:
 	return String(val).to_int()
 
 
+# For coord arguments: "~" is current, "~5" current + 5, "5" is 5. Missing (optional argument) is current too
+func get_coordinate(arg_name: String, current: float) -> float:
+	if not arguments.has(arg_name):
+		return current
+	var token := String(arguments[arg_name])
+	if token.begins_with("~"):
+		return current + (token.substr(1).to_float() if token.length() > 1 else 0.0)
+	return token.to_float()
+
 func get_float(arg_name: String) -> float:
 	var val = arguments.get(arg_name, 0.0)
 	if val is float or val is int:

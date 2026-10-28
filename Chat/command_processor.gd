@@ -97,6 +97,8 @@ func _parse_arg_type(type_str: String) -> ArgumentNode.Type:
 			return ArgumentNode.Type.FLOAT
 		"any":
 			return ArgumentNode.Type.ANY
+		"coord":
+			return ArgumentNode.Type.COORD
 		_:
 			return ArgumentNode.Type.STRING
 
