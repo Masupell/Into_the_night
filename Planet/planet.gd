@@ -17,6 +17,8 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
+@export var min_vertex_spacing: float = 1.0 # meters, chunks don't split further than this, the data has no finer detail anyway
+var lod_level_limit: int # max_lod_level, or lower if vertices would get closer than min_vertex_spacing
 @export var terrain_max_tile_level: int = 6 # 2^6 * 128 + 1 = 8193 pixels per face edge, ETOPO 60s has 5400 per face (90 degrees). Baked tiles bring their own
 @export var terrain_tile_size: int = 129 # Pixels per tile edge
 @export var earth_meters_per_unit: float = 8849.0 # Real meters that become max_height, Everest = max_height
@@ -177,6 +179,19 @@ func compute_lod_thresholds():
 		var dist = level_edge / tan(deg_to_rad(lod_threshold_deg))
 		var safety_floor = level_diagonal * 2.2
 		split_distances[level] = maxf(dist, safety_floor)
+
+	lod_level_limit = 0
+	while lod_level_limit < max_lod_level and edge_size / float(1 << (lod_level_limit + 1)) / grid_size_for_level(lod_level_limit + 1) >= min_vertex_spacing:
+		lod_level_limit += 1
+
+# Vertices per chunk edge, bigger chunks get more so the curvature stays smooth
+func grid_size_for_level(level: int) -> int:
+	var level_edge = edge_length / float(1 << level) # 2^level by bitshifting
+	if level_edge > 2500.0: # 2.5km across
+		return grid_size * 4
+	elif level_edge > 1000.0: # 1km across
+		return grid_size * 2
+	return grid_size
 
 
 func request_chunk() -> Chunk:

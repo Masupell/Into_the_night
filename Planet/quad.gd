@@ -60,7 +60,7 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 	var surface_center = CubeSphere.spherify(mid_point) * planet.radius
 	var dist_to_cam = camera_pos.distance_to(surface_center)
 
-	if level < planet.max_lod_level and dist_to_cam < planet.split_distances[level]:
+	if level < planet.lod_level_limit and dist_to_cam < planet.split_distances[level]:
 		if children.is_empty():
 			split()
 		for child in children:
@@ -252,14 +252,6 @@ func remove_chunk():
 		chunk.recycle()
 		chunk = null
 
-func get_grid_size(lvl: int) -> int:
-	var edge_length = planet.edge_length / float(1 << lvl) # 2^lvl by bitshifting
-	if edge_length > 2500.0: # 2.5km across, in this case for level 0 & 1
-		return planet.grid_size * 4
-	elif edge_length > 1000.0: # 1km across, level 2
-		return planet.grid_size * 2
-	return planet.grid_size
-
 func draw_chunk():
 	if chunk == null:
 		chunk = planet.request_chunk()
@@ -273,7 +265,7 @@ func draw_chunk():
 
 	chunk.owner_quad = self
 
-	var current_grid_size = get_grid_size(level)
+	var current_grid_size = planet.grid_size_for_level(level)
 
 	var sampler := planet.terrain_data.get_sampler(face, level, current_grid_size, (uv_min + uv_max) * 0.5)
 	if sampler == null: # tile is loading, chunk retries next frame and keeps its old mesh until then
