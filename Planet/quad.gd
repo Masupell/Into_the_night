@@ -19,6 +19,11 @@ var frustum_state = FRUSTUM_INTERSECT
 var bounding_aabb: AABB # sea level up to max_height, for culling while the camera is above water
 var bounding_aabb_deep: AABB # also down to the ocean floor, for culling under water and for colliders
 var bounding_center: Vector3
+var surface_dir: Vector3 # unit direction of the quad center, for the LOD distance
+# Visible surface heights in meters above the radius (ground, or the water at 0), for the LOD distance.
+# From the last own chunk mesh, until then inherited from the parent (whole possible range at the roots)
+var surface_min: float
+var surface_max: float
 var horizon_cos_alpha: float
 var horizon_sin_alpha: float
 var parent_quad: Quad
@@ -38,6 +43,12 @@ func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, 
 	self.face = _parent.face if _parent else _face
 	self.uv_min = CubeSphere.cube_to_face_uv(face, corners[0])
 	self.uv_max = CubeSphere.cube_to_face_uv(face, corners[2])
+	if _parent:
+		surface_min = _parent.surface_min
+		surface_max = _parent.surface_max
+	else:
+		surface_min = planet.min_terrain_radius - planet.radius
+		surface_max = planet.max_height
 	calculate_bounds()
 
 func update_lod(camera_pos: Vector3, frustum_planes: Array):
@@ -56,9 +67,10 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 			child.update_lod(camera_pos, frustum_planes)
 		return
 
-	var mid_point = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
-	var surface_center = CubeSphere.spherify(mid_point) * planet.radius
-	var dist_to_cam = camera_pos.distance_to(surface_center)
+	# Nearest point of the quad centers height range, camera height clamped into it
+	var cam_height := camera_pos.dot(surface_dir) - planet.radius
+	var surface_point := surface_dir * (planet.radius + clampf(cam_height, surface_min, surface_max))
+	var dist_to_cam = camera_pos.distance_to(surface_point)
 
 	if level < planet.lod_level_limit and dist_to_cam < planet.split_distances[level]:
 		if children.is_empty():
@@ -77,6 +89,11 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array):
 				merge()
 			elif not chunk.visible and not has_active_ancestor_chunk():
 				chunk.visible = true
+
+# min/max of the chunks mesh heights (x, y). Where the ground is under water, the water surface at 0 is visible too
+func set_surface_range(height_range: Vector2):
+	surface_min = height_range.x
+	surface_max = maxf(height_range.y, 0.0) if height_range.x < 0.0 else height_range.y
 
 func are_children_ready() -> bool:
 	if children.is_empty():
@@ -330,6 +347,7 @@ func calculate_bounds():
 	bounding_center = surface_center * (1.0 + (planet.max_height / planet.radius) * 0.5)
 
 	var center_dir = surface_center.normalized()
+	surface_dir = center_dir
 	var corner_dir = CubeSphere.spherify(corners[0]).normalized()
 	horizon_cos_alpha = center_dir.dot(corner_dir)
 	horizon_sin_alpha = sqrt(maxf(0.0, 1.0 - horizon_cos_alpha * horizon_cos_alpha))

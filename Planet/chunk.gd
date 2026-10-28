@@ -78,6 +78,8 @@ func apply_generation_results(total_data: Dictionary):
 
 	center = total_data["center"]
 	update_position()
+	if owner_quad:
+		owner_quad.set_surface_range(total_data["surface_range"])
 
 	var terrain_data = total_data["terrain"]
 	var water_data = total_data["water"]
@@ -126,7 +128,8 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 		"center": terrain_center,
 		"needs_collision": needs_collision,
 		"terrain": data["mesh_array"],
-		"water": data["water_data"]
+		"water": data["water_data"],
+		"surface_range": data["surface_range"]
 	}
 	chunk_instance.apply_generation_results.call_deferred(total_data)
 
@@ -165,6 +168,8 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var detail_scale := radius / DETAIL_TUNED_FOR_RADIUS
 
 	var min_chunk_height := INF
+	var min_surface := INF # real height range in meters (tile + detail noise), for the quads LOD distance
+	var max_surface := -INF
 
 	for y in range(num_vertices):
 		for x in range(num_vertices):
@@ -193,7 +198,10 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 			if macro_height_ratio < min_chunk_height:
 				min_chunk_height = macro_height_ratio
-			var r: float = radius + surface_height(detail_noise, sphere_point, macro_height_ratio, height, detail_scale)
+			var surface := surface_height(detail_noise, sphere_point, macro_height_ratio, height, detail_scale)
+			min_surface = minf(min_surface, surface)
+			max_surface = maxf(max_surface, surface)
+			var r: float = radius + surface
 			vertices[idx] = Vector3(sx * r - terrain_center[0], sy * r - terrain_center[1], sz * r - terrain_center[2])
 			normals[idx] = sphere_point.normalized()
 			heights[idx] = Vector2(macro_height_ratio, 0.0)
@@ -355,7 +363,8 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 	return {
 		"mesh_array": mesh_array,
-		"water_data": water_data
+		"water_data": water_data,
+		"surface_range": Vector2(min_surface, max_surface)
 	}
 
 # Sea level is height 0, so the water is just a sphere at the planet radius
