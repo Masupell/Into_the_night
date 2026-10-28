@@ -1,0 +1,10 @@
+{
+  "width": 43200,
+  "height": 21600,
+  "format": "int16_le_meters",
+  "layout": "row 0 = 90N, column 0 = 180W, pixel centers",
+  "min_m": -10775,
+  "max_m": 8354,
+  "source": "ETOPO_2022_v1_30s_N90W180_surface.tif",
+  "downsample": 1
+}

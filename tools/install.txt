@@ -1,7 +1,18 @@
+Elevation data (not tracked by git), all commands from the project root.
+The game crashes without data/earth_tiles.bin, so this is necessary.
+
+1. Python environment for the tools
 python3 -m venv tools/.venv && tools/.venv/bin/pip install -r tools/requirements.txt
 
-run convert_etopt.py
+2. Download ETOPO 2022 surface elevation, 30 arc seconds, GeoTIFF (1.6 GB) into data/source/
+https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/30s/30s_surface_elev_gtif/ETOPO_2022_v1_30s_N90W180_surface.tif
+mkdir -p data/source && curl -L -o data/source/ETOPO_2022_v1_30s_N90W180_surface.tif <url above>
 
-run tools/.venv/bin/python tools/bake_tiles.py data/etopo_60s data/earth_tiles --max-level 6
+3. Convert to raw int16 meters (data/etopo_30s.bin, 1.9 GB, needs ~13 GB RAM)
+tools/.venv/bin/python tools/convert_etopo.py data/source/ETOPO_2022_v1_30s_N90W180_surface.tif data/etopo_30s
 
-Currently crashes without earth_tiles.bin, so necessary
+4. Bake the tile pyramid the game streams from (data/earth_tiles.bin, 4.4 GB)
+tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
+
+Afterwards data/source/ and data/etopo_30s.bin are only needed to bake again.
+Smaller/older alternative: the 60s file (60s_surface_elev_gtif, 0.5 GB) with --max-level 6 gives a 1.1 GB earth_tiles.bin

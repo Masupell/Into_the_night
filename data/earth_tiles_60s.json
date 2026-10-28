@@ -1,0 +1,38 @@
+{
+  "format": "int16_le_meters",
+  "tile_size": 129,
+  "max_level": 6,
+  "tile_bytes": 33282,
+  "levels": [
+    {
+      "level": 0,
+      "offset": 0
+    },
+    {
+      "level": 1,
+      "offset": 199692
+    },
+    {
+      "level": 2,
+      "offset": 998460
+    },
+    {
+      "level": 3,
+      "offset": 4193532
+    },
+    {
+      "level": 4,
+      "offset": 16973820
+    },
+    {
+      "level": 5,
+      "offset": 68094972
+    },
+    {
+      "level": 6,
+      "offset": 272579580
+    }
+  ],
+  "layout": "level offset + ((face * n + tile_y) * n + tile_x) * tile_bytes, n = 2^level, pixels x + y * tile_size",
+  "source": "ETOPO_2022_v1_60s_N90W180_surface.tif"
+}

@@ -15,7 +15,7 @@ Output:
   <out>.json  tile_size, max_level, level offsets, ...
 
 Usage (from the project root):
-  tools/.venv/bin/python tools/bake_tiles.py data/etopo_60s data/earth_tiles --max-level 6
+  tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
 """
 
 import argparse

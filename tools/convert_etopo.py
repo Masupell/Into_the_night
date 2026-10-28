@@ -6,7 +6,7 @@ Output (next to each other):
   <out>.json  width, height, format and where the data came from
 
 Usage (from the project root):
-  tools/.venv/bin/python tools/convert_etopo.py data/source/ETOPO_2022_v1_60s_N90W180_surface.tif data/etopo_60s
+  tools/.venv/bin/python tools/convert_etopo.py data/source/ETOPO_2022_v1_30s_N90W180_surface.tif data/etopo_30s
   add --downsample 4 for a smaller test file (averages 4x4 pixels)
 """
 
