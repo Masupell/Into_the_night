@@ -179,6 +179,8 @@ func _process(delta: float) -> void:
 	var mat = atmosphere.material_override as ShaderMaterial
 	if mat:
 		mat.set_shader_parameter("sun_dir", sun_dir)
+	terrain_material.set_shader_parameter("sun_dir", sun_dir)
+	terrain_material.set_shader_parameter("planet_center", global_position)
 
 # Quitting: tasks still running would write into chunks and tiles that are being freed, wait for all of them first
 func _exit_tree() -> void:

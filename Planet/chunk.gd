@@ -19,9 +19,10 @@ var owner_quad: Quad = null
 
 var planet: Planet # Easier with reference right now
 
-# Collider: triangles come from the worker with every build, the body itself is made later by Planet.update_colliders,
-# only near the player and a few per frame (adding one to the physics world is the expensive part)
-var collision_faces: PackedVector3Array
+# Collider: made by Planet.update_colliders, only near the player and a few per frame (adding one to the physics world
+# is the expensive part). Mesh vertices and triangles are kept for it, the list of triangle corners is only built then
+var collision_vertices: PackedVector3Array
+var collision_indices: PackedInt32Array
 var collider: StaticBody3D = null
 var collider_outdated: bool = false # mesh was rebuilt, the old collider stays until the new one is made
 
@@ -76,12 +77,17 @@ func completely_reset_and_return():
 	if water_mesh_instance:
 		water_mesh_instance.mesh = null
 	remove_collider()
-	collision_faces = PackedVector3Array()
+	collision_vertices = PackedVector3Array()
+	collision_indices = PackedInt32Array()
 	planet.return_chunk(self)
 
 func build_collider():
+	var faces := PackedVector3Array() # 3 vertices per triangle
+	faces.resize(collision_indices.size())
+	for i in range(collision_indices.size()):
+		faces[i] = collision_vertices[collision_indices[i]]
 	var shape := ConcavePolygonShape3D.new()
-	shape.set_faces(collision_faces)
+	shape.set_faces(faces)
 	var collision_shape := CollisionShape3D.new()
 	collision_shape.shape = shape
 	var body := StaticBody3D.new()
@@ -120,7 +126,8 @@ func apply_generation_results(total_data: Dictionary):
 	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data)
 	self.mesh = terrain_mesh
 
-	collision_faces = total_data["collision_faces"]
+	collision_vertices = total_data["collision_vertices"]
+	collision_indices = total_data["collision_indices"]
 	if collider:
 		collider_outdated = true
 
@@ -150,7 +157,8 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 		"gen_id": gen_id,
 		"center": terrain_center,
 		"terrain": data["mesh_array"],
-		"collision_faces": data["collision_faces"],
+		"collision_vertices": data["mesh_array"][Mesh.ARRAY_VERTEX],
+		"collision_indices": data["mesh_array"][Mesh.ARRAY_INDEX],
 		"water": data["water_data"],
 		"surface_range": data["surface_range"]
 	}
@@ -165,21 +173,15 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 	var skirt_vertex_count = num_vertices * 4
 	var total_vertices_all = total_vertices + skirt_vertex_count
-	var main_index_count = grid_size * grid_size * 6
-	var skirt_index_count = grid_size * 4 * 6
-	var total_index_count = main_index_count + skirt_index_count
 
+	var grid := ChunkGrid.for_size(grid_size) # triangles and uvs, the same for every chunk of this size
 	var vertices = PackedVector3Array()
-	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
 	var heights = PackedVector2Array() # terrain height for the shader in x (UV2), float, so it can be negative
-	var uvs = PackedVector2Array()
 
 	vertices.resize(total_vertices_all)
-	indices.resize(total_index_count)
 	normals.resize(total_vertices_all)
 	heights.resize(total_vertices_all)
-	uvs.resize(total_vertices_all)
 
 	var sphere_points_cache = PackedFloat64Array() # x, y, z per vertex, double precision, for the water
 	sphere_points_cache.resize(total_vertices * 3)
@@ -196,23 +198,39 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 	# No calls to GDScript functions in the per vertex loops (only once per chunk): those block each other between
 	# the worker threads, so chunks would hardly build faster on several threads. Native ones (lerpf, sqrt, noise) are fine
-	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size)
+	# One extra ring of vertices around the chunk, only for the normals: the edge vertices need their neighbours
+	# on both sides, so neighbouring chunks get the same normals there and the edges don't show
+	var ext_size: int = num_vertices + 2
+	var ext_count: int = ext_size * ext_size
+	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size, 1)
 	var sphere_points := PackedVector3Array() # 32 bit is fine for directions, noise and normals
-	sphere_points.resize(total_vertices)
+	sphere_points.resize(ext_count)
+	var ext_cache := PackedFloat64Array() # x, y, z of the sphere points, double precision
+	ext_cache.resize(ext_count * 3)
 
-	for y in range(num_vertices):
-		for x in range(num_vertices):
-			var idx = x + (y * num_vertices)
-			var u = float(x) / grid_size
-			var v = float(y) / grid_size
+	# Cube point and spherify on plain floats (64 bit), Vector3 (32 bit) is only ~3cm precise at 300km
+	# top-left to top-right and bottom-left to bottom-right per column (computed once), then vertical.
+	# The ring is just a bit outside 0..1
+	var top := PackedFloat64Array() # x, y, z per column
+	var bottom := PackedFloat64Array()
+	top.resize(ext_size * 3)
+	bottom.resize(ext_size * 3)
+	for ex in range(ext_size):
+		var u := float(ex - 1) / grid_size
+		top[ex * 3] = lerpf(c0.x, c1.x, u)
+		top[ex * 3 + 1] = lerpf(c0.y, c1.y, u)
+		top[ex * 3 + 2] = lerpf(c0.z, c1.z, u)
+		bottom[ex * 3] = lerpf(c3.x, c2.x, u)
+		bottom[ex * 3 + 1] = lerpf(c3.y, c2.y, u)
+		bottom[ex * 3 + 2] = lerpf(c3.z, c2.z, u)
 
-			uvs[idx] = Vector2(u, v)
-
-			# Cube point and spherify on plain floats (64 bit), Vector3 (32 bit) is only ~3cm precise at 300km
-			# top-left to top-right, bottom-left to bottom-right, then vertical
-			var px := lerpf(lerpf(c0.x, c1.x, u), lerpf(c3.x, c2.x, u), v)
-			var py := lerpf(lerpf(c0.y, c1.y, u), lerpf(c3.y, c2.y, u), v)
-			var pz := lerpf(lerpf(c0.z, c1.z, u), lerpf(c3.z, c2.z, u), v)
+	for ey in range(ext_size):
+		var v := float(ey - 1) / grid_size
+		for ex in range(ext_size):
+			var e: int = ex + ey * ext_size
+			var px := lerpf(top[ex * 3], bottom[ex * 3], v)
+			var py := lerpf(top[ex * 3 + 1], bottom[ex * 3 + 1], v)
+			var pz := lerpf(top[ex * 3 + 2], bottom[ex * 3 + 2], v)
 			var x2 := px * px
 			var y2 := py * py
 			var z2 := pz * pz
@@ -220,24 +238,44 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			var sx := px * sqrt(1.0 - y2 / 2.0 - z2 / 2.0 + y2 * z2 / 3.0)
 			var sy := py * sqrt(1.0 - z2 / 2.0 - x2 / 2.0 + z2 * x2 / 3.0)
 			var sz := pz * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
-			sphere_points_cache[idx * 3] = sx
-			sphere_points_cache[idx * 3 + 1] = sy
-			sphere_points_cache[idx * 3 + 2] = sz
-			sphere_points[idx] = Vector3(sx, sy, sz)
+			ext_cache[e * 3] = sx
+			ext_cache[e * 3 + 1] = sy
+			ext_cache[e * 3 + 2] = sz
+			sphere_points[e] = Vector3(sx, sy, sz)
 
 	var surfaces := surface_heights(detail_noise, sphere_points, macro_ratios, height, detail_scale)
 
-	for idx in range(total_vertices):
-		var macro_height_ratio := macro_ratios[idx]
-		if macro_height_ratio < min_chunk_height:
-			min_chunk_height = macro_height_ratio
-		var surface := surfaces[idx]
-		min_surface = minf(min_surface, surface)
-		max_surface = maxf(max_surface, surface)
-		var r: float = radius + surface
-		vertices[idx] = Vector3(sphere_points_cache[idx * 3] * r - terrain_center[0], sphere_points_cache[idx * 3 + 1] * r - terrain_center[1], sphere_points_cache[idx * 3 + 2] * r - terrain_center[2])
-		normals[idx] = sphere_points[idx].normalized()
-		heights[idx] = Vector2(macro_height_ratio, 0.0)
+	var ups := PackedVector3Array() # away from the planet at each vertex, the skirts hang straight down from the edges
+	ups.resize(total_vertices)
+	var positions := PackedVector3Array() # relative to the chunk center, ring included
+	positions.resize(ext_count)
+	for e in range(ext_count):
+		var r: float = radius + surfaces[e]
+		positions[e] = Vector3(ext_cache[e * 3] * r - terrain_center[0], ext_cache[e * 3 + 1] * r - terrain_center[1], ext_cache[e * 3 + 2] * r - terrain_center[2])
+
+	for y in range(num_vertices):
+		for x in range(num_vertices):
+			var idx: int = x + y * num_vertices
+			var e: int = (x + 1) + (y + 1) * ext_size
+			sphere_points_cache[idx * 3] = ext_cache[e * 3]
+			sphere_points_cache[idx * 3 + 1] = ext_cache[e * 3 + 1]
+			sphere_points_cache[idx * 3 + 2] = ext_cache[e * 3 + 2]
+
+			var macro_height_ratio := macro_ratios[e]
+			if macro_height_ratio < min_chunk_height:
+				min_chunk_height = macro_height_ratio
+			var surface := surfaces[e]
+			min_surface = minf(min_surface, surface)
+			max_surface = maxf(max_surface, surface)
+			vertices[idx] = positions[e]
+			ups[idx] = sphere_points[e].normalized()
+			heights[idx] = Vector2(macro_height_ratio, 0.0)
+
+			# Smooth normal of the terrain: from the neighbours left/right and above/below, pointing away from the planet
+			var normal := (positions[e + 1] - positions[e - 1]).cross(positions[e + ext_size] - positions[e - ext_size])
+			if normal.dot(sphere_points[e]) < 0.0:
+				normal = -normal
+			normals[idx] = normal.normalized()
 
 	var edges_to_stitch: Array[PackedInt32Array] = []
 
@@ -275,24 +313,6 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			normals[curr_idx] = (normals[prev_idx] + normals[next_idx]).normalized()
 			heights[curr_idx] = heights[prev_idx].lerp(heights[next_idx], 0.5)
 
-	for y in range(grid_size):
-		for x in range(grid_size):
-			var idx = (x + (y * grid_size)) * 6
-			var top_left = x + y * num_vertices
-			var top_right = (x+1) + y * num_vertices
-			var bottom_left = x + (y+1) * num_vertices
-			var bottom_right = (x+1) + (y+1) * num_vertices
-
-			indices[idx] = top_left
-			indices[idx+1] = top_right
-			indices[idx+2] = bottom_left
-
-			indices[idx+3] = top_right
-			indices[idx+4] = bottom_right
-			indices[idx+5] = bottom_left
-
-
-
 	# Skirt, so that the occasional still existing hole (nbo idea why though), dissapears
 	var north_offset = total_vertices
 	var south_offset = north_offset + num_vertices
@@ -302,107 +322,41 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	for x in range(num_vertices):
 		var src_idx = x # north edge, y = 0
 		var s_idx = north_offset + x
-		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
-		uvs[s_idx] = uvs[src_idx]
 
 	for x in range(num_vertices):
 		var src_idx = x + grid_size * num_vertices # south edge
 		var s_idx = south_offset + x
-		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
-		uvs[s_idx] = uvs[src_idx]
 
 	for y in range(num_vertices):
 		var src_idx = y * num_vertices # west edge
 		var s_idx = west_offset + y
-		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
-		uvs[s_idx] = uvs[src_idx]
 
 	for y in range(num_vertices):
 		var src_idx = grid_size + y * num_vertices # east edge
 		var s_idx = east_offset + y
-		vertices[s_idx] = vertices[src_idx] - normals[src_idx] * skirt_depth
+		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
-		uvs[s_idx] = uvs[src_idx]
-
-	var idx_ptr = main_index_count
-
-	for x in range(grid_size):
-		var top_left = north_offset + x
-		var top_right = north_offset + x + 1
-		var bottom_left = x
-		var bottom_right = x + 1
-		indices[idx_ptr] = top_left
-		indices[idx_ptr+1] = top_right
-		indices[idx_ptr+2] = bottom_left
-		indices[idx_ptr+3] = top_right
-		indices[idx_ptr+4] = bottom_right
-		indices[idx_ptr+5] = bottom_left
-		idx_ptr += 6
-
-	for x in range(grid_size):
-		var top_left = x + grid_size * num_vertices
-		var top_right = x + 1 + grid_size * num_vertices
-		var bottom_left = south_offset + x
-		var bottom_right = south_offset + x + 1
-		indices[idx_ptr] = top_left
-		indices[idx_ptr+1] = top_right
-		indices[idx_ptr+2] = bottom_left
-		indices[idx_ptr+3] = top_right
-		indices[idx_ptr+4] = bottom_right
-		indices[idx_ptr+5] = bottom_left
-		idx_ptr += 6
-
-	for y in range(grid_size):
-		var top_left = west_offset + y
-		var top_right = y * num_vertices
-		var bottom_left = west_offset + y + 1
-		var bottom_right = (y+1) * num_vertices
-		indices[idx_ptr] = top_left
-		indices[idx_ptr+1] = top_right
-		indices[idx_ptr+2] = bottom_left
-		indices[idx_ptr+3] = top_right
-		indices[idx_ptr+4] = bottom_right
-		indices[idx_ptr+5] = bottom_left
-		idx_ptr += 6
-
-	for y in range(grid_size):
-		var top_left = grid_size + y * num_vertices
-		var top_right = east_offset + y
-		var bottom_left = grid_size + (y+1) * num_vertices
-		var bottom_right = east_offset + y + 1
-		indices[idx_ptr] = top_left
-		indices[idx_ptr+1] = top_right
-		indices[idx_ptr+2] = bottom_left
-		indices[idx_ptr+3] = top_right
-		indices[idx_ptr+4] = bottom_right
-		indices[idx_ptr+5] = bottom_left
-		idx_ptr += 6
-
 
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
-	mesh_array[Mesh.ARRAY_INDEX] = indices
+	mesh_array[Mesh.ARRAY_INDEX] = grid.terrain_indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_TEX_UV2] = heights
-	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
+	mesh_array[Mesh.ARRAY_TEX_UV] = grid.terrain_uvs
 
-	var water_data = calculate_water_mesh(grid_size, radius, terrain_center, min_chunk_height, sphere_points_cache)
-
-	# Triangles for the collider, 3 vertices each (what create_trimesh_shape would make, but here on the worker)
-	var collision_faces := PackedVector3Array()
-	collision_faces.resize(indices.size())
-	for i in range(indices.size()):
-		collision_faces[i] = vertices[indices[i]]
+	var water_data = calculate_water_mesh(grid, grid_size, radius, terrain_center, min_chunk_height, sphere_points_cache)
 
 	return {
 		"mesh_array": mesh_array,
-		"collision_faces": collision_faces,
 		"water_data": water_data,
 		"surface_range": Vector2(min_surface, max_surface)
 	}
@@ -419,6 +373,9 @@ static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVe
 		var sphere_point := sphere_points[i]
 		var macro_height_ratio := macro_height_ratios[i]
 		var macro_height := macro_height_ratio * height
+		if macro_height_ratio <= 0.0: # no detail below sea level (land is 0 there), so the noise isn't needed
+			result[i] = macro_height
+			continue
 
 		# A bit more detail, needs twaking, but first step
 		var large_detail := detail_noise.get_noise_3dv(sphere_point * (80.0 * detail_scale))
@@ -433,7 +390,7 @@ static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVe
 		result[i] = macro_height + detail * detail_strength * land * detail_height_scale
 	return result
 
-static func calculate_water_mesh(grid_size: int, radius: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array) -> Dictionary:
+static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array) -> Dictionary:
 	if min_terrain_height > 0.1:
 		return { "should_render": false }
 
@@ -444,20 +401,14 @@ static func calculate_water_mesh(grid_size: int, radius: float, terrain_center: 
 	var total_vertices = num_vertices * num_vertices
 
 	var vertices = PackedVector3Array()
-	var indices = PackedInt32Array()
 	var normals = PackedVector3Array()
-	var uvs = PackedVector2Array()
 
 	vertices.resize(total_vertices)
 	normals.resize(total_vertices)
-	uvs.resize(total_vertices)
-	indices.resize(grid_size * grid_size * 6)
 
 	for y in range(num_vertices):
 		for x in range(num_vertices):
 			var idx = x + (y * num_vertices)
-			var u = float(x) / grid_size
-			var v = float(y) / grid_size
 
 			var sx := sphere_points_cache[idx * 3]
 			var sy := sphere_points_cache[idx * 3 + 1]
@@ -465,28 +416,11 @@ static func calculate_water_mesh(grid_size: int, radius: float, terrain_center: 
 
 			vertices[idx] = Vector3(sx * radius - terrain_center[0], sy * radius - terrain_center[1], sz * radius - terrain_center[2])
 			normals[idx] = Vector3(sx, sy, sz)
-			uvs[idx] = Vector2(u, v)
-
-	for y in range(grid_size):
-		for x in range(grid_size):
-			var idx = (x + (y * grid_size)) * 6
-			var top_left = x + y * num_vertices
-			var top_right = (x+1) + y * num_vertices
-			var bottom_left = x + (y+1) * num_vertices
-			var bottom_right = (x+1) + (y+1) * num_vertices
-
-			indices[idx] = top_left
-			indices[idx+1] = top_right
-			indices[idx+2] = bottom_left
-
-			indices[idx+3] = top_right
-			indices[idx+4] = bottom_right
-			indices[idx+5] = bottom_left
 
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
-	mesh_array[Mesh.ARRAY_INDEX] = indices
+	mesh_array[Mesh.ARRAY_INDEX] = grid.water_indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
-	mesh_array[Mesh.ARRAY_TEX_UV] = uvs
+	mesh_array[Mesh.ARRAY_TEX_UV] = grid.water_uvs
 
 	return {
 		"should_render": true,

@@ -29,11 +29,13 @@ func sample(uv: Vector2) -> float:
 		result += wy[j] * (wx.x * h[row + xa] + wx.y * h[row + x0] + wx.z * h[row + x0 + 1] + wx.w * h[row + xb])
 	return result
 
-# Heights of a whole chunk grid ((grid_size + 1)^2, row by row), same values as sample() at each vertex.
+# Heights of a whole chunk grid ((grid_size + 1 + 2 * border)^2, row by row), same values as sample() at each vertex.
+# border: extra rows / columns of vertices around the chunk (for the normals at its edges). Those can lie outside
+# this tile, there the height continues in a straight line from the tile's edge.
 # One call per chunk: calls to GDScript functions block each other between threads, so the per vertex loop has none.
 # x only depends on the column and y only on the row, so their pixels and weights are computed once
-func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
-	var n := grid_size + 1
+func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int = 0) -> PackedFloat32Array:
+	var n := grid_size + 1 + 2 * border
 	var step := tile.size - 1
 	var xs := PackedInt32Array()
 	var wxs := PackedVector4Array()
@@ -44,10 +46,13 @@ func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloa
 	ys.resize(n)
 	wys.resize(n)
 	for i in range(n):
-		var t := float(i) / grid_size
+		var t := float(i - border) / grid_size
 		# a * (1 - t) + b * t, so the edges hit uv_min/uv_max exactly and neighbouring chunks sample the same values
 		var x := pixel_pos(uv_min.x * (1.0 - t) + uv_max.x * t, tile.tile_x)
 		var y := pixel_pos(uv_min.y * (1.0 - t) + uv_max.y * t, tile.tile_y)
+		if i < border or i >= n - border: # the extra ring may be outside the tile
+			x = pixel_pos_unclamped(uv_min.x * (1.0 - t) + uv_max.x * t, tile.tile_x)
+			y = pixel_pos_unclamped(uv_min.y * (1.0 - t) + uv_max.y * t, tile.tile_y)
 		xs[i] = first_pixel(x, step)
 		ys[i] = first_pixel(y, step)
 		wxs[i] = weights(x - xs[i], xs[i] == 0, xs[i] + 2 > step)
@@ -80,14 +85,20 @@ func pixel_pos(uv: float, tile_index: int) -> float:
 	var step := tile.size - 1
 	return clampf((uv * tile.tiles_per_face - tile_index) * step, 0.0, step)
 
-# floor, but at most the second to last pixel, so pixel + 1 stays inside the tile (t is 1.0 on the last pixel then)
+func pixel_pos_unclamped(uv: float, tile_index: int) -> float:
+	return (uv * tile.tiles_per_face - tile_index) * (tile.size - 1)
+
+# floor, but at most the second to last pixel, so pixel + 1 stays inside the tile (t is 1.0 on the last pixel then).
+# Outside the tile the first / last two pixels, t is then below 0 / above 1
 static func first_pixel(pos: float, step: int) -> int:
-	return mini(int(pos), step - 1)
+	return clampi(floori(pos), 0, step - 1)
 
 # Catmull-Rom weights of the 4 pixels around t (between pixel 1 and 2): curve through both,
 # the slope at each taken from its two neighbours. A pixel outside the tile (before the first / after the last)
 # is extrapolated in a straight line from the two inside, folded into the weights of those two
 static func weights(t: float, at_start: bool, at_end: bool) -> Vector4:
+	if t < 0.0 or t > 1.0: # outside the tile: straight line through the two pixels at its edge
+		return Vector4(0.0, 1.0 - t, t, 0.0)
 	var t2 := t * t
 	var t3 := t2 * t
 	var w := Vector4(0.5 * (-t + 2.0 * t2 - t3), 0.5 * (2.0 - 5.0 * t2 + 3.0 * t3), 0.5 * (t + 4.0 * t2 - 3.0 * t3), 0.5 * (t3 - t2))

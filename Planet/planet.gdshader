@@ -14,6 +14,15 @@ uniform vec3 dark_grass_color: source_color = vec3(0.12, 0.28, 0.12);
 uniform vec3 rock_color: source_color = vec3(0.4, 0.3, 0.2);
 uniform vec3 snow_color: source_color = vec3(1.0);
 
+// 0: smooth terrain normals from the mesh, 1: flat triangles (low poly look)
+uniform float facet_amount : hint_range(0.0, 1.0) = 0.75;
+// Light from the whole sky, not only the sun: without it everything facing away from the sun is black.
+// Only on the day side, strongest on surfaces facing up. sun_dir and planet_center are set by the planet every frame
+uniform vec3 sky_color : source_color = vec3(0.45, 0.6, 0.85);
+uniform float sky_light = 0.3;
+uniform vec3 sun_dir = vec3(0.0, 0.0, 1.0);
+uniform vec3 planet_center;
+
 
 //float hash3D(vec3 p) // fast 3d hash function I got
 //{
@@ -25,13 +34,13 @@ uniform vec3 snow_color: source_color = vec3(1.0);
 void vertex()
 {
     v_height = UV2.x; // height relative to sea level (0), 1 = max_height
-	v_world_pos = VERTEX;
+	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment()
 {
 	vec3 face_normal = normalize(cross(dFdy(VERTEX), dFdx(VERTEX))); //inverted because of mesh winding order
-	NORMAL = face_normal; //normalize(mix(NORMAL, face_normal, 0.5));
+	NORMAL = normalize(mix(NORMAL, face_normal, facet_amount));
 	SPECULAR = 0.1;
 	ROUGHNESS = 0.8;
 
@@ -83,4 +92,10 @@ void fragment()
 	}
 
 	ALBEDO = final_albedo;
+
+	vec3 up = normalize(v_world_pos - planet_center);
+	float daylight = smoothstep(-0.1, 0.15, dot(up, sun_dir)); // fades out over dusk
+	vec3 world_normal = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	float sky_visible = 0.5 + 0.5 * dot(world_normal, up); // a wall sees half the sky, an overhang less
+	EMISSION = final_albedo * sky_color * sky_light * daylight * sky_visible;
 }
