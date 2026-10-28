@@ -171,6 +171,12 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var min_surface := INF # real height range in meters (tile + detail noise), for the quads LOD distance
 	var max_surface := -INF
 
+	# No calls to GDScript functions in the per vertex loops (only once per chunk): those block each other between
+	# the worker threads, so chunks would hardly build faster on several threads. Native ones (lerpf, sqrt, noise) are fine
+	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size)
+	var sphere_points := PackedVector3Array() # 32 bit is fine for directions, noise and normals
+	sphere_points.resize(total_vertices)
+
 	for y in range(num_vertices):
 		for x in range(num_vertices):
 			var idx = x + (y * num_vertices)
@@ -184,27 +190,31 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			var px := lerpf(lerpf(c0.x, c1.x, u), lerpf(c3.x, c2.x, u), v)
 			var py := lerpf(lerpf(c0.y, c1.y, u), lerpf(c3.y, c2.y, u), v)
 			var pz := lerpf(lerpf(c0.z, c1.z, u), lerpf(c3.z, c2.z, u), v)
-			var sx := CubeSphere.spherify_axis(px, py * py, pz * pz)
-			var sy := CubeSphere.spherify_axis(py, pz * pz, px * px)
-			var sz := CubeSphere.spherify_axis(pz, px * px, py * py)
+			var x2 := px * px
+			var y2 := py * py
+			var z2 := pz * pz
+			# CubeSphere.spherify_axis, inlined
+			var sx := px * sqrt(1.0 - y2 / 2.0 - z2 / 2.0 + y2 * z2 / 3.0)
+			var sy := py * sqrt(1.0 - z2 / 2.0 - x2 / 2.0 + z2 * x2 / 3.0)
+			var sz := pz * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 			sphere_points_cache[idx * 3] = sx
 			sphere_points_cache[idx * 3 + 1] = sy
 			sphere_points_cache[idx * 3 + 2] = sz
-			var sphere_point := Vector3(sx, sy, sz) # 32 bit is fine for directions, noise and normals
+			sphere_points[idx] = Vector3(sx, sy, sz)
 
-			# a * (1 - t) + b * t, so the edges hit uv_min/uv_max exactly and neighbouring chunks sample the same values
-			var face_uv = Vector2(uv_min.x * (1.0 - u) + uv_max.x * u, uv_min.y * (1.0 - v) + uv_max.y * v)
-			var macro_height_ratio = sampler.sample(face_uv)
+	var surfaces := surface_heights(detail_noise, sphere_points, macro_ratios, height, detail_scale)
 
-			if macro_height_ratio < min_chunk_height:
-				min_chunk_height = macro_height_ratio
-			var surface := surface_height(detail_noise, sphere_point, macro_height_ratio, height, detail_scale)
-			min_surface = minf(min_surface, surface)
-			max_surface = maxf(max_surface, surface)
-			var r: float = radius + surface
-			vertices[idx] = Vector3(sx * r - terrain_center[0], sy * r - terrain_center[1], sz * r - terrain_center[2])
-			normals[idx] = sphere_point.normalized()
-			heights[idx] = Vector2(macro_height_ratio, 0.0)
+	for idx in range(total_vertices):
+		var macro_height_ratio := macro_ratios[idx]
+		if macro_height_ratio < min_chunk_height:
+			min_chunk_height = macro_height_ratio
+		var surface := surfaces[idx]
+		min_surface = minf(min_surface, surface)
+		max_surface = maxf(max_surface, surface)
+		var r: float = radius + surface
+		vertices[idx] = Vector3(sphere_points_cache[idx * 3] * r - terrain_center[0], sphere_points_cache[idx * 3 + 1] * r - terrain_center[1], sphere_points_cache[idx * 3 + 2] * r - terrain_center[2])
+		normals[idx] = sphere_points[idx].normalized()
+		heights[idx] = Vector2(macro_height_ratio, 0.0)
 
 	var edges_to_stitch: Array[PackedInt32Array] = []
 
@@ -368,22 +378,30 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	}
 
 # Sea level is height 0, so the water is just a sphere at the planet radius
-# Meters above the planet radius at a point, from the tile height plus detail noise.
+# Meters above the planet radius at each point, from the tile height plus detail noise.
 # Also used by Planet.ground_height_at, so the ground check matches the mesh
-static func surface_height(detail_noise: FastNoiseLite, sphere_point: Vector3, macro_height_ratio: float, height: float, detail_scale: float) -> float:
-	var macro_height = macro_height_ratio * height
+# For many points at once, the loop has no GDScript function calls (see calculate_terrain_mesh)
+static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVector3Array, macro_height_ratios: PackedFloat32Array, height: float, detail_scale: float) -> PackedFloat32Array:
+	var result := PackedFloat32Array()
+	result.resize(sphere_points.size())
+	var detail_height_scale := height / DETAIL_TUNED_FOR_HEIGHT
+	for i in range(sphere_points.size()):
+		var sphere_point := sphere_points[i]
+		var macro_height_ratio := macro_height_ratios[i]
+		var macro_height := macro_height_ratio * height
 
-	# A bit more detail, needs twaking, but first step
-	var large_detail = detail_noise.get_noise_3dv(sphere_point * (80.0 * detail_scale))
-	var medium_detail = detail_noise.get_noise_3dv(sphere_point * (250.0 * detail_scale))
-	var small_detail = detail_noise.get_noise_3dv(sphere_point * (700.0 * detail_scale))
+		# A bit more detail, needs twaking, but first step
+		var large_detail := detail_noise.get_noise_3dv(sphere_point * (80.0 * detail_scale))
+		var medium_detail := detail_noise.get_noise_3dv(sphere_point * (250.0 * detail_scale))
+		var small_detail := detail_noise.get_noise_3dv(sphere_point * (700.0 * detail_scale))
 
-	var detail = large_detail * 4.0 + medium_detail * 1.5 + small_detail * 0.4
-	var land = smoothstep(0.0, 0.05, macro_height_ratio) # no detail below sea level
-	var mountain_factor = smoothstep(0.25, 0.67, macro_height_ratio)
-	var detail_strength = lerp(1.0, 6.0, mountain_factor)
+		var detail := large_detail * 4.0 + medium_detail * 1.5 + small_detail * 0.4
+		var land := smoothstep(0.0, 0.05, macro_height_ratio) # no detail below sea level
+		var mountain_factor := smoothstep(0.25, 0.67, macro_height_ratio)
+		var detail_strength := lerpf(1.0, 6.0, mountain_factor)
 
-	return macro_height + detail * detail_strength * land * (height / DETAIL_TUNED_FOR_HEIGHT)
+		result[i] = macro_height + detail * detail_strength * land * detail_height_scale
+	return result
 
 static func calculate_water_mesh(grid_size: int, radius: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array) -> Dictionary:
 	if min_terrain_height > 0.1:

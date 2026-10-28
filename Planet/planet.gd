@@ -259,7 +259,7 @@ func ground_height_at(dir: Vector3) -> float:
 	var h := terrain_data.sample_loaded(face, CubeSphere.get_face_uv(dir, face))
 	if is_nan(h):
 		return min_terrain_radius - radius
-	return Chunk.surface_height(detail_noise, dir.normalized(), h, max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)
+	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
 
 # If the active controller (free cam / plane) ended up below the ground (too fast for its collision, or no collider yet),
 # push it back out along the up direction, clearance meters above the ground. Returns true if it had to

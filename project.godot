@@ -63,3 +63,7 @@ show_lod={
 "type": "bool",
 "value": false
 }
+
+[threading]
+
+worker_pool/low_priority_thread_ratio=0.75
