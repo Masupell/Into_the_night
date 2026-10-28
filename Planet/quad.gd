@@ -145,13 +145,13 @@ func are_children_ready() -> bool:
 # Frustum planes point outwards (distance > 0 is outside). Box as center + half size:
 # the corner furthest inside is distance - r, the one furthest outside distance + r, with r = extents projected on the normal
 func test_frustum(frustum_planes: Array, under_water: bool) -> int:
-	var center := aabb_deep_center if under_water else aabb_center
+	var center_box := aabb_deep_center if under_water else aabb_center
 	var extents := aabb_deep_extents if under_water else aabb_extents
 	var margin := aabb_deep_margin if under_water else aabb_margin
 	var fully_inside_count := 0
 
 	for plane: Plane in frustum_planes:
-		var distance := plane.distance_to(center)
+		var distance := plane.distance_to(center_box)
 		var r := extents.dot(plane.normal.abs())
 		if distance - r > margin:
 			return FRUSTUM_OUTSIDE

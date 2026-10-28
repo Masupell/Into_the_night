@@ -34,8 +34,9 @@ var root_quads: Array[Quad] = []
 @export_range(10.0, 40.0) var lod_threshold_deg: float = 20.0
 var split_distances: Array[float] = []
 
-@onready var camera = get_viewport().get_camera_3d()
-var camera_mode = 2
+@onready var camera = get_viewport().get_camera_3d() # main camera: LOD and frustum culling, the debug camera only looks
+var camera_mode = 2 # what the player looks through: 1 plane, 2 free cam, 3 debug camera
+var main_mode = 2 # 1 plane, 2 free cam: sits at the world origin (true position), LOD and colliders follow it. Stays during debug
 @export var near_per_clearance: float = 0.002 # near plane grows with the distance above the highest mountains (free cam only)
 var base_near: Dictionary = {} # Camera3D -> near set in the scene, the near plane never gets smaller than that
 
@@ -156,7 +157,10 @@ func _process(delta: float) -> void:
 
 	#var cam_pos = to_local(camera.global_position) # as long as planet is on 0,0,0 'to_local' does not matter
 	var cam_pos = get_true_position()
-	update_camera_planes()
+	update_camera_planes(camera)
+	var view_camera := get_viewport().get_camera_3d()
+	if view_camera and view_camera != camera: # debug camera
+		update_camera_planes(view_camera)
 	var frustum_planes = []
 	for p in camera.get_frustum():
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
@@ -191,10 +195,10 @@ func compute_lod_thresholds():
 # So far = distance to the horizon + how far behind the horizon the top of the atmosphere still shows.
 # Near plane: grows with the distance to the highest possible ground, so near / far stays small high up.
 # Not in plane mode, the plane itself is right in front of the camera there
-func update_camera_planes():
-	if not base_near.has(camera):
-		base_near[camera] = camera.near
-	var pos: Vector3 = get_true_position() + camera.global_position # plane camera is behind the plane, debug camera elsewhere
+func update_camera_planes(cam: Camera3D):
+	if not base_near.has(cam):
+		base_near[cam] = cam.near
+	var pos: Vector3 = get_true_position() + cam.global_position # plane camera is behind the plane, debug camera elsewhere
 	var dist := pos.length()
 
 	# above water the sea surface blocks the view, under water only the ocean floor does
@@ -203,14 +207,15 @@ func update_camera_planes():
 	var top := maxf(atmosphere_radius, radius + max_height)
 	var to_horizon := sqrt(maxf(0.0, dist * dist - occluder * occluder))
 	var behind_horizon := sqrt(top * top - occluder * occluder)
-	camera.far = (to_horizon + behind_horizon) * 1.05
-	(atmosphere.material_override as ShaderMaterial).set_shader_parameter("max_draw_distance", camera.far * 0.9)
+	cam.far = (to_horizon + behind_horizon) * 1.05
+	if cam == get_viewport().get_camera_3d(): # the one that renders
+		(atmosphere.material_override as ShaderMaterial).set_shader_parameter("max_draw_distance", cam.far * 0.9)
 
-	var near: float = base_near[camera]
-	if camera_mode != 1:
+	var near: float = base_near[cam]
+	if cam != plane.camera:
 		var clearance := dist - (radius + max_height)
 		near = maxf(near, clearance * near_per_clearance)
-	camera.near = near
+	cam.near = near
 
 # Colliders for the shown chunks near the player. Distance to the chunk's real height range (ocean floor up to the water
 # surface under water), not its bounding box: that reaches from the ocean floor to the highest mountain and on a slope
@@ -281,9 +286,20 @@ func shift_origin(moved_by: Vector3):
 	global_position = -get_true_position()
 	update_chunk_positions()
 
-	# temprorary for plane
-	if camera_mode != 1 and plane:
+	# Everything else in world space has to move back by the same, so it stays at its place on the planet
+	if main_mode != 1 and plane:
 		plane.global_position -= moved_by
+	if camera_mode == 3:
+		free_cam.debug_camera.global_position -= moved_by
+
+# Same as ground_height_at, but from the finest tile, which gets loaded if needed: NAN until it is.
+# Works anywhere on the planet without chunks (the plane while it isn't controlled)
+func ground_height_loading(dir: Vector3) -> float:
+	var face := CubeSphere.get_face(dir)
+	var h = terrain_data.sample_finest(face, CubeSphere.get_face_uv(dir, face))
+	if is_nan(h):
+		return NAN
+	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
 
 # Meters above the radius of the ground under dir, from the finest loaded tile (without loading anything)
 # Ocean floor depth if nothing is loaded there yet, so it is never above the real ground
@@ -364,25 +380,53 @@ func set_time_speed(multiplier: float):
 	update_orbit_speed()
 
 
+# Debug camera: starts at the current view and only moves itself. The main controller (plane or free cam) stays,
+# so LOD, frustum culling and colliders keep following it and can be looked at from outside
 func switch_to_free(debug: bool = false):
-	var plane_camera = plane.camera
-	free_cam.main_camera.rotation = Vector3.ZERO
-	free_cam.global_transform = plane_camera.global_transform
-	free_cam.main_camera.current = true
+	if debug:
+		var view_camera := get_viewport().get_camera_3d()
+		free_cam.process_mode = Node.PROCESS_MODE_INHERIT # it controls the debug camera, also when the plane is main
+		camera_mode = free_cam.set_debug_mode(true, view_camera.global_transform)
+		canvas_layer.visible = true
+		flight_hud.visible = false
+		return
+
+	if main_mode == 1: # coming from the plane (or debug with the plane as main): free cam starts at the plane view
+		free_cam.main_camera.rotation = Vector3.ZERO
+		free_cam.global_transform = plane.camera.global_transform
+	main_mode = 2
 	camera = free_cam.main_camera
 	free_cam.process_mode = Node.PROCESS_MODE_INHERIT
 	canvas_layer.visible = true
 	flight_hud.visible = false
-	camera_mode = free_cam.set_debug_mode(debug)
+	camera_mode = free_cam.set_debug_mode(false)
 
-func switch_to_plane(): # kind of switches to plane from old free position, because I never changed the code her
-	var pivot = plane.pivot
-	var spring = plane.spring_arm
-	pivot.global_basis = free_cam.global_basis
-	var forward = -free_cam.global_basis.z
-	plane.global_position = free_cam.global_position + forward * spring.spring_length
-	plane.global_basis = free_cam.global_basis
+# Puts the plane in front of the camera that is looked through (free or debug), level with the ground there,
+# pointing where the camera looks, standing still
+func move_plane_to_view():
+	var view_camera := get_viewport().get_camera_3d()
+	var look := -view_camera.global_basis.z
+	var plane_position: Vector3 = view_camera.global_position + look * plane.spring_arm.spring_length
+	var up := (get_true_position() + plane_position).normalized()
+	var forward := look.slide(up).normalized()
+	if forward.length_squared() < 0.001: # looking straight up or down
+		forward = view_camera.global_basis.y.slide(up).normalized()
+
+	plane.global_position = plane_position # if the plane is main (debug camera), it moves the origin there itself next physics frame
+	plane.global_basis = Basis.looking_at(-forward, up) # the plane flies along its +Z
+	plane.pivot.global_basis = Basis.looking_at(forward, up) # camera behind it
 	plane.velocity = Vector3.ZERO
+	plane.move_speed = 0.0
+	plane.fall_speed = 0.0
+
+# Back to the plane where it is. It is somewhere in world space, the free cam was at the origin
+func switch_to_plane():
+	free_cam.set_debug_mode(false)
+	if main_mode != 1:
+		main_mode = 1
+		var plane_position: Vector3 = plane.global_position
+		shift_origin(plane_position)
+		plane.global_position = Vector3.ZERO
 	plane.camera.current = true
 	camera = plane.camera
 	free_cam.process_mode = Node.PROCESS_MODE_DISABLED

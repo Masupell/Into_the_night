@@ -66,11 +66,12 @@ func _process(delta):
 	if Input.is_key_pressed(KEY_E):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
 
-	var active = planet and planet.camera_mode != 1
+	var active = planet and planet.main_mode == 2 # the free cam is the main controller (also while the debug camera looks)
 	if debug_mode:
+		# only the debug camera moves, the main controller stays where it is
 		velocity = Vector3.ZERO
-		if direction != Vector3.ZERO and active:
-			planet.shift_origin(direction.normalized() * move_speed * delta)
+		if direction != Vector3.ZERO:
+			debug_camera.global_position += direction.normalized() * move_speed * delta
 	else:
 		velocity = direction.normalized() * move_speed if direction != Vector3.ZERO else Vector3.ZERO
 		move_and_slide()
@@ -91,10 +92,11 @@ func _process(delta):
 		planet.add_child(cube)
 		cube.global_position = controlled_camera.global_position
 
-func set_debug_mode(debug: bool) -> int:
+# from: where the debug camera starts (the view before switching)
+func set_debug_mode(debug: bool, from: Transform3D = Transform3D()) -> int:
 	debug_mode = debug
 	if debug:
-		debug_camera.global_transform = main_camera.global_transform
+		debug_camera.global_transform = from
 		debug_camera.current = true
 		main_camera.current = false
 		controlled_camera = debug_camera

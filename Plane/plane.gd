@@ -89,6 +89,14 @@ func _physics_process(delta: float) -> void:
 	if true_pos.length_squared() < 0.001:
 		return
 	var planet_up = true_pos.normalized()
+
+	# Not the main controller: no chunks and colliders around it (they only exist near the main one), so the ground
+	# comes from the terrain tile under it. Waits in place until that tile is loaded
+	var remote_ground := NAN
+	if planet.main_mode != 1:
+		remote_ground = planet.ground_height_loading(planet_up)
+		if is_nan(remote_ground):
+			return
 	up_direction = planet_up
 	var forward = global_transform.basis.z
 
@@ -96,7 +104,8 @@ func _physics_process(delta: float) -> void:
 	var pitch_input := 0.0
 	var roll_input := 0.0
 	var yaw_input := 0.0
-	if !is_typing:
+	var controlled: bool = planet.camera_mode == 1
+	if controlled and !is_typing:
 		if Input.is_key_pressed(KEY_SHIFT):
 			thrust_input += 1.0
 		if Input.is_key_pressed(KEY_CTRL):
@@ -150,12 +159,19 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
-	if planet.camera_mode == 1 and global_position != Vector3.ZERO:
+	if planet.main_mode == 1 and global_position != Vector3.ZERO:
 		planet.shift_origin(global_position)
 		global_position = Vector3.ZERO
-	if planet.camera_mode == 1 and planet.keep_above_ground(2.0): # safety net, collision should normally stop it
+	if planet.main_mode == 1 and planet.keep_above_ground(2.0): # safety net, collision should normally stop it
 		fall_speed = 0.0
 	true_pos = global_position - planet.global_position #planet.get_true_position()
+
+	if not is_nan(remote_ground):
+		var min_distance: float = planet.radius + remote_ground + 2.0 # same clearance as keep_above_ground
+		if true_pos.length() < min_distance:
+			global_position += planet_up * (min_distance - true_pos.length())
+			fall_speed = 0.0
+			true_pos = global_position - planet.global_position
 
 
 	#Animation
@@ -257,6 +273,8 @@ func _physics_process(delta: float) -> void:
 	pivot.global_transform.basis = pivot.global_transform.basis.orthonormalized()
 
 func _input(event):
+	if planet.camera_mode != 1:
+		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if planet.get_true_position().length_squared() < 1.0:
 			return # at the planet center there is no up, the rotations below would fail

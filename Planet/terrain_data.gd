@@ -83,6 +83,17 @@ func sample_loaded(face: int, uv: Vector2) -> float:
 			return TerrainSampler.new(tiles[key]).sample(uv)
 	return NAN
 
+# Height at a face uv from the finest tile, loading it if needed (NAN until it is loaded).
+# For things away from the player that need the ground without any chunks there (the plane while it isn't controlled)
+func sample_finest(face: int, uv: Vector2) -> float:
+	var count := 1 << max_level
+	var key := Vector4i(face, max_level, mini(int(uv.x * count), count - 1), mini(int(uv.y * count), count - 1))
+	if not tiles.has(key):
+		request_tile(key)
+		return NAN
+	last_used[key] = Time.get_ticks_msec()
+	return TerrainSampler.new(tiles[key]).sample(uv)
+
 func get_tile(face: int, level: int, tile_x: int, tile_y: int) -> TerrainTile:
 	return tiles.get(Vector4i(face, level, tile_x, tile_y))
 

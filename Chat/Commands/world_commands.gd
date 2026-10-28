@@ -42,6 +42,8 @@ func register_all():
 			}
 	})
 
+	command_processor.register_command_multiple("plane here", self, "Puts the plane in front of the current camera, level and standing still")
+
 	var chunk_command = "chunk { border <visible:any|show,hide> | lod <visible:any|show,hide> }" # 1 for visible, 0 for hidden
 	command_processor.register_command_multiple(chunk_command, self, "Different things with the chunks, only for debug right now",
 	{
@@ -110,6 +112,13 @@ func cmd_camera(context: CommandContext) -> String:
 				command_processor.console.add_message("[color=green]Switched to debug[/color]")
 		_:
 			return "Invalid Argument. Expected 1/plane, 2/free, or 3/debug."
+	return ""
+
+func cmd_plane_here(_context: CommandContext) -> String:
+	if planet.camera_mode == 1:
+		return "Already looking at the plane"
+	planet.move_plane_to_view()
+	command_processor.console.add_message("[color=green]Plane moved here[/color]")
 	return ""
 
 func cmd_chunk_border(context: CommandContext) -> String:
