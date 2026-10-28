@@ -16,9 +16,9 @@ uniform float max_draw_distance = 10000.0; // set from the cameras far plane, se
 // Higher = deeper blue, but also more haze seen from space and a reddish horizon (long way through the air to the camera)
 uniform vec3 rayleigh_depth = vec3(0.05, 0.12, 0.29);
 // Extra air only on the sunlight's way to each point, not on the way to the camera: the planet is small, so near
-// the horizon the sunlight goes through much less air than on Earth (~10x the way straight up instead of ~38x),
-// sunsets wouldn't get red without it
-uniform float sun_reddening = 4.0;
+// the horizon the sunlight goes through much less air than on Earth (~15x the way straight up instead of ~38x),
+// sunsets wouldn't get red without it. Depends on planet radius / atmosphere height, retune when those change
+uniform float sun_reddening = 2.5;
 // Ozone only absorbs, mostly green-orange, and only counted on the sunlight's way. It is what keeps the sky blue at dusk
 // instead of olive (Earth: ~0.01, 0.028, 0.0013, here 2x because it is spread like the air instead of a layer up high)
 uniform vec3 ozone_depth = vec3(0.02, 0.056, 0.0026);

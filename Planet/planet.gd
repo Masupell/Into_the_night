@@ -3,11 +3,12 @@ extends Node3D
 
 @export var planet_seed: int = 0
 
-@export var radius := 63710#5000.0
-@export var start_altitude := 70000.0
+@export var radius: float = 318550.0 # 1/20 of the Earth (was 63710, 1/100)
+@export var start_altitude: float = 350000.0
 @export var max_depth_ratio: float = 1.25 # deepest ocean floor below sea level, times max_height (ETOPO: 10752 / 8849 = 1.22)
-@export var max_height: float = 442.4#88.48#200.0#500.0
-@export var atmosphere_radius: float = radius+5000.0
+@export var max_height: float = 1106.0 # Everest, 2.5x the real height for 1/20 of the Earth, mountains would feel too small otherwise
+@export var atmosphere_height: float = 10000.0 # 2x the Earth's in proportion, so it keeps some distance to the (higher) mountains
+var atmosphere_radius: float # set in _ready from radius + atmosphere_height
 
 @export_group("Terrain Settings")
 @export var terrain_noise: FastNoiseLite
@@ -82,6 +83,7 @@ func _ready() -> void:
 
 	edge_length = (radius * 2.0) / sqrt(3.0)
 	min_terrain_radius = radius - max_depth_ratio * max_height
+	atmosphere_radius = radius + atmosphere_height
 	orbit_distance = radius * orbit_distance_factor
 
 	free_cam.global_position.z = radius + start_altitude
