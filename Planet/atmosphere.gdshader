@@ -1,10 +1,11 @@
 shader_type spatial;
-render_mode cull_front, unshaded, blend_mix, depth_test_disabled;
+render_mode cull_front, unshaded, blend_mix, depth_test_disabled, skip_vertex_transform;
 
 uniform float planet_radius;
 uniform float atmosphere_radius;
 uniform vec3 sun_dir;
 uniform float atmosphere_density_mult : hint_range(0.1, 5.0) = 1.5;
+uniform float max_draw_distance = 10000.0; // set from the cameras far plane, see Planet.update_camera_planes
 
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
 
@@ -22,6 +23,18 @@ vec2 ray_sphere_intersect(vec3 ray_origin, vec3 ray_dir_vector, vec3 sphere_cent
 
 	float sqrt_d = sqrt(d);
 	return vec2(-b - sqrt_d, -b + sqrt_d);
+}
+
+// The back faces (far side of the sphere, behind the planet) can be further away than the far plane.
+// Vertices beyond max_draw_distance are moved towards the camera along their view ray, so they stay on the same pixel
+// and the fragment shader still runs everywhere, it only uses the ray direction, the atmosphere itself is ray traced
+void vertex()
+{
+	VERTEX = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float dist = length(VERTEX);
+	if (dist > max_draw_distance) {
+		VERTEX *= max_draw_distance / dist;
+	}
 }
 
 void fragment()

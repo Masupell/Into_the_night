@@ -33,6 +33,8 @@ var split_distances: Array[float] = []
 
 @onready var camera = get_viewport().get_camera_3d()
 var camera_mode = 2
+@export var near_per_clearance: float = 0.002 # near plane grows with the distance above the highest mountains (free cam only)
+var base_near: Dictionary = {} # Camera3D -> near set in the scene, the near plane never gets smaller than that
 
 #var world_image: Image
 var terrain_data: TerrainData
@@ -77,10 +79,6 @@ func _ready() -> void:
 	edge_length = (radius * 2.0) / sqrt(3.0)
 	min_terrain_radius = radius - max_depth_ratio * max_height
 	orbit_distance = radius * orbit_distance_factor
-
-	# Has to see the whole planet from a bit further out, 100km was enough for 5km radius
-	for cam in get_tree().root.find_children("*", "Camera3D", true, false):
-		cam.far = maxf(cam.far, radius * 4.0)
 
 	free_cam.global_position.z = radius + start_altitude
 	#plane.global_position = free_cam.global_position
@@ -155,6 +153,7 @@ func _process(delta: float) -> void:
 
 	#var cam_pos = to_local(camera.global_position) # as long as planet is on 0,0,0 'to_local' does not matter
 	var cam_pos = get_true_position()
+	update_camera_planes()
 	var frustum_planes = []
 	for p in camera.get_frustum():
 		frustum_planes.append(Plane(p.normal, p.d - p.normal.dot(global_position)))
@@ -183,6 +182,31 @@ func compute_lod_thresholds():
 	lod_level_limit = 0
 	while lod_level_limit < max_lod_level and edge_size / float(1 << (lod_level_limit + 1)) / grid_size_for_level(lod_level_limit + 1) >= min_vertex_spacing:
 		lod_level_limit += 1
+
+# Far plane: nothing is visible past the horizon, except things sticking up behind it, the highest being the atmosphere.
+# So far = distance to the horizon + how far behind the horizon the top of the atmosphere still shows.
+# Near plane: grows with the distance to the highest possible ground, so near / far stays small high up.
+# Not in plane mode, the plane itself is right in front of the camera there
+func update_camera_planes():
+	if not base_near.has(camera):
+		base_near[camera] = camera.near
+	var pos: Vector3 = get_true_position() + camera.global_position # plane camera is behind the plane, debug camera elsewhere
+	var dist := pos.length()
+
+	# above water the sea surface blocks the view, under water only the ocean floor does
+	@warning_ignore("incompatible_ternary")
+	var occluder: float = radius if dist > radius else min_terrain_radius
+	var top := maxf(atmosphere_radius, radius + max_height)
+	var to_horizon := sqrt(maxf(0.0, dist * dist - occluder * occluder))
+	var behind_horizon := sqrt(top * top - occluder * occluder)
+	camera.far = (to_horizon + behind_horizon) * 1.05
+	(atmosphere.material_override as ShaderMaterial).set_shader_parameter("max_draw_distance", camera.far * 0.9)
+
+	var near: float = base_near[camera]
+	if camera_mode != 1:
+		var clearance := dist - (radius + max_height)
+		near = maxf(near, clearance * near_per_clearance)
+	camera.near = near
 
 # Vertices per chunk edge, bigger chunks get more so the curvature stays smooth
 func grid_size_for_level(level: int) -> int:
