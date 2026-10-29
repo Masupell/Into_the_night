@@ -12,6 +12,7 @@ uniform vec3 seabed_color: source_color = vec3(0.55, 0.48, 0.38);
 uniform vec3 grass_color: source_color = vec3(0.1, 0.4, 0.1);
 uniform vec3 dark_grass_color: source_color = vec3(0.12, 0.28, 0.12);
 uniform vec3 rock_color: source_color = vec3(0.4, 0.3, 0.2);
+uniform vec3 tundra_color: source_color = vec3(0.42, 0.4, 0.28);
 uniform vec3 snow_color: source_color = vec3(1.0);
 
 // Height bands in real Earth meters (v_height * meters_per_unit), blending from the first to the second value.
@@ -28,6 +29,8 @@ uniform float equator_temperature = 27.0;
 uniform float pole_temperature = -20.0;
 uniform float temperature_curve = 1.5;
 uniform float lapse_rate = 6.5;
+// Tundra (cold, low plants) over the grass from the first to the second temperature, snow comes after it
+uniform vec2 tundra_temperature_band = vec2(3.0, -2.0);
 // Snow (and ice) on land from the first to the second temperature
 uniform vec2 snow_temperature_band = vec2(-6.0, -9.0);
 
@@ -87,11 +90,13 @@ void fragment()
 	float latitude = asin(clamp(abs(up.y), 0.0, 1.0)) / (PI * 0.5); // 0 equator, 1 pole (the planet never rotates)
 	float sea_temperature = mix(equator_temperature, pole_temperature, pow(latitude, temperature_curve));
 	float temperature = sea_temperature - lapse_rate * max(meters, 0.0) / 1000.0;
+	float to_tundra = smoothstep(tundra_temperature_band.x, tundra_temperature_band.y, temperature) * to_grass; // beaches stay sand
 	float to_snow = smoothstep(snow_temperature_band.x, snow_temperature_band.y, temperature) * step(0.0, meters);
 
 	vec3 final_albedo = seabed_color;
     final_albedo = mix(final_albedo, grass_color, to_grass);
     final_albedo = mix(final_albedo, dark_grass_color, to_dark_grass);
+    final_albedo = mix(final_albedo, tundra_color, to_tundra);
     final_albedo = mix(final_albedo, rock_color, to_rock);
     final_albedo = mix(final_albedo, snow_color, to_snow);
 
