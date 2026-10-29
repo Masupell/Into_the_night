@@ -275,6 +275,12 @@ func grid_size_for_level(level: int) -> int:
 		return grid_size * 2
 	return grid_size
 
+# Distance between two vertices along a chunk edge of this level (on the cube, relative between levels is what matters).
+# Not just halving per level: grid_size_for_level gives bigger chunks more vertices, so where it changes,
+# two levels have the same spacing
+func vertex_spacing_for_level(level: int) -> float:
+	return edge_length / float(1 << level) / grid_size_for_level(level)
+
 
 func request_chunk() -> Chunk:
 	var c: Chunk

@@ -331,10 +331,13 @@ func draw_chunk():
 	var e_nb = get_neighbor_east()
 	var w_nb = get_neighbor_west()
 
-	var stitch_n = n_nb != null and n_nb.level < level
-	var stitch_s = s_nb != null and s_nb.level < level
-	var stitch_e = e_nb != null and e_nb.level < level
-	var stitch_w = w_nb != null and w_nb.level < level
+	# Stitch only where the neighbour's vertices are really further apart (twice), a lower level alone isn't enough:
+	# with more grid cells it can have the same spacing, then the edges already match and stitching would open gaps
+	var spacing := planet.vertex_spacing_for_level(level) * 1.5
+	var stitch_n = n_nb != null and planet.vertex_spacing_for_level(n_nb.level) > spacing
+	var stitch_s = s_nb != null and planet.vertex_spacing_for_level(s_nb.level) > spacing
+	var stitch_e = e_nb != null and planet.vertex_spacing_for_level(e_nb.level) > spacing
+	var stitch_w = w_nb != null and planet.vertex_spacing_for_level(w_nb.level) > spacing
 
 	#if level > highest_lod:
 		#highest_lod = level
