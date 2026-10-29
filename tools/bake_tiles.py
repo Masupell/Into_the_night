@@ -1,5 +1,6 @@
-"""Bakes the terrain tile pyramid from a converted elevation file (see convert_etopo.py) into one pack file,
+"""Bakes the terrain tile pyramid from a converted equirect file into one pack file,
 so the game only reads the tiles it needs instead of keeping the whole map in memory.
+Heights (convert_etopo.py, int16 meters) or moisture (convert_aridity.py, uint8), the format is kept.
 
 Must match the game code:
   - CubeSphere.FACES / face_to_sphere (cube face uv -> sphere direction)
@@ -10,12 +11,14 @@ Only the finest level is sampled from the source. Every coarser level takes ever
 which is exactly what the game did before (coarse pixels are also fine pixels), so chunks of different levels still meet.
 
 Output:
-  <out>.bin   all tiles, int16 little endian meters, row major (x + y * tile_size).
+  <out>.bin   all tiles, same format as the input (int16 little endian meters / uint8 moisture), row major (x + y * tile_size).
               Level L starts at levels[L].offset, tile (face, x, y) is at index (face * n + y) * n + x with n = 2^L
   <out>.json  tile_size, max_level, level offsets, ...
 
 Usage (from the project root):
   tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
+  tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
+  (moisture: --tile-size has to be TerrainTile.MOISTURE_SIZE, --max-level the same as the heights)
 """
 
 import argparse
@@ -24,6 +27,12 @@ import time
 from pathlib import Path
 
 import numpy as np
+
+# format -> numpy type of a pixel, same in and out
+FORMATS = {
+    "int16_le_meters": np.dtype("<i2"),
+    "uint8_moisture": np.dtype("u1"),
+}
 
 # CubeSphere.FACES: [top_left, top_right, bottom_right, bottom_left]
 FACES = np.array([
@@ -78,11 +87,12 @@ def main():
     args = parser.parse_args()
 
     info = json.loads(args.input.with_suffix(".json").read_text())
-    assert info["format"] == "int16_le_meters"
-    data = np.fromfile(args.input.with_suffix(".bin"), dtype="<i2").reshape(info["height"], info["width"]).astype(np.float32)
+    dtype = FORMATS[info["format"]]
+    limits = np.iinfo(dtype)
+    data = np.fromfile(args.input.with_suffix(".bin"), dtype=dtype).reshape(info["height"], info["width"]).astype(np.float32)
 
     step = args.tile_size - 1
-    tile_bytes = args.tile_size * args.tile_size * 2
+    tile_bytes = args.tile_size * args.tile_size * dtype.itemsize
     levels = []
     offset = 0
     for level in range(args.max_level + 1):
@@ -91,17 +101,17 @@ def main():
     total_bytes = offset
 
     face_pixels = (1 << args.max_level) * step  # last pixel index of a face at the finest level
-    out = np.memmap(args.output.with_suffix(".bin"), dtype="<i2", mode="w+", shape=(total_bytes // 2,))
+    out = np.memmap(args.output.with_suffix(".bin"), dtype=dtype, mode="w+", shape=(total_bytes // dtype.itemsize,))
 
     start = time.time()
     for face in range(6):
-        finest = np.empty((face_pixels + 1, face_pixels + 1), dtype=np.int16)
+        finest = np.empty((face_pixels + 1, face_pixels + 1), dtype=dtype)
         cols = np.arange(face_pixels + 1, dtype=np.float64) / face_pixels
         for row_start in range(0, face_pixels + 1, 256):
             rows = np.arange(row_start, min(row_start + 256, face_pixels + 1), dtype=np.float64) / face_pixels
             u, v = np.meshgrid(cols, rows)
-            meters = sample_equirect(data, *face_to_sphere(face, u, v))
-            finest[row_start:row_start + len(rows)] = np.clip(np.rint(meters), -32768, 32767)
+            values = sample_equirect(data, *face_to_sphere(face, u, v))
+            finest[row_start:row_start + len(rows)] = np.clip(np.rint(values), limits.min, limits.max)
 
         for level in range(args.max_level + 1):
             n = 1 << level
@@ -110,13 +120,13 @@ def main():
                 for tile_x in range(n):
                     tile = grid[tile_y * step:tile_y * step + args.tile_size, tile_x * step:tile_x * step + args.tile_size]
                     index = (face * n + tile_y) * n + tile_x
-                    begin = (levels[level]["offset"] + index * tile_bytes) // 2
+                    begin = (levels[level]["offset"] + index * tile_bytes) // dtype.itemsize
                     out[begin:begin + tile.size] = tile.ravel()
         print(f"face {face} done ({time.time() - start:.0f} s)")
 
     out.flush()
     meta = {
-        "format": "int16_le_meters",
+        "format": info["format"],
         "tile_size": args.tile_size,
         "max_level": args.max_level,
         "tile_bytes": tile_bytes,

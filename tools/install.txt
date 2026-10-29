@@ -1,4 +1,4 @@
-Elevation data (not tracked by git), all commands from the project root.
+Elevation and moisture data (not tracked by git), all commands from the project root.
 The game crashes without data/earth_tiles.bin, so this is necessary.
 
 1. Python environment for the tools
@@ -14,5 +14,18 @@ tools/.venv/bin/python tools/convert_etopo.py data/source/ETOPO_2022_v1_30s_N90W
 4. Bake the tile pyramid the game streams from (data/earth_tiles.bin, 4.4 GB)
 tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
 
-Afterwards data/source/ and data/etopo_30s.bin are only needed to bake again.
+5. Download the Global Aridity Index v3.1 (annual, 646 MB zip) into data/source/ and unpack the aridity map
+Zomer, R. J.; Trabucco, A. (2022/2025): Global Aridity Index and Potential Evapotranspiration (ET0) Database v3.1,
+https://doi.org/10.6084/m9.figshare.7504448, license CC BY 4.0 (the game has to credit it)
+curl -L -o data/source/Global-AI_ET0__annual_v3_1.zip https://ndownloader.figshare.com/files/56300327
+unzip -j data/source/Global-AI_ET0__annual_v3_1.zip 'Global-AI_ET0__annual_v3_1/ai_v31_yr.tif' -d data/source
+
+6. Convert to moisture (data/moisture_60s.bin, 233 MB, needs ~12 GB RAM, ~30 s)
+tools/.venv/bin/python tools/convert_aridity.py data/source/ai_v31_yr.tif data/moisture_60s --downsample 2
+
+7. Bake the moisture tiles (data/earth_moisture.bin, 0.14 GB, ~15 s). --max-level must be the same as in step 4,
+--tile-size must be TerrainTile.MOISTURE_SIZE. Without this file the game runs, but everything has plain grass
+tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
+
+Afterwards data/source/, data/etopo_30s.bin and data/moisture_60s.bin are only needed to bake again.
 Smaller/older alternative: the 60s file (60s_surface_elev_gtif, 0.5 GB) with --max-level 6 gives a 1.1 GB earth_tiles.bin

@@ -9,8 +9,13 @@ var tile_size: int
 var max_level: int
 var tile_bytes: int
 var level_offsets: PackedInt64Array
+# Moisture tiles (tools/convert_aridity.py + bake_tiles.py), same layout with TerrainTile.MOISTURE_SIZE pixels per edge.
+# Empty path when there are none, then every tile gets the default moisture
+var moisture_path := ""
+var moisture_tile_bytes: int
+var moisture_level_offsets: PackedInt64Array
 
-func _init(_path: String, _meters_per_unit: float) -> void:
+func _init(_path: String, _meters_per_unit: float, _moisture_path := "") -> void:
 	path = _path + ".bin"
 	meters_per_unit = _meters_per_unit
 
@@ -21,6 +26,19 @@ func _init(_path: String, _meters_per_unit: float) -> void:
 	tile_bytes = int(info["tile_bytes"])
 	for entry in info["levels"]:
 		level_offsets.append(int(entry["offset"]))
+
+	if _moisture_path != "":
+		if not FileAccess.file_exists(_moisture_path + ".json") or not FileAccess.file_exists(_moisture_path + ".bin"):
+			push_warning("DiskSource: no moisture tiles at %s, see tools/install.txt" % _moisture_path)
+			return
+		var moisture_info: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(_moisture_path + ".json"))
+		assert(moisture_info["format"] == "uint8_moisture", "DiskSource: unknown moisture format %s" % moisture_info["format"])
+		assert(int(moisture_info["tile_size"]) == TerrainTile.MOISTURE_SIZE, "DiskSource: moisture tile size doesn't match TerrainTile.MOISTURE_SIZE")
+		assert(int(moisture_info["max_level"]) >= max_level, "DiskSource: moisture tiles have fewer levels than the heights")
+		moisture_path = _moisture_path + ".bin"
+		moisture_tile_bytes = int(moisture_info["tile_bytes"])
+		for entry in moisture_info["levels"]:
+			moisture_level_offsets.append(int(entry["offset"]))
 
 func fill_heights(tile: TerrainTile) -> void:
 	assert(tile.size == tile_size and tile.level <= max_level, "DiskSource: tile does not match the baked data")
@@ -33,3 +51,17 @@ func fill_heights(tile: TerrainTile) -> void:
 
 	for i in range(tile_size * tile_size):
 		tile.heights[i] = bytes.decode_s16(i * 2) / meters_per_unit
+
+func fill_moisture(tile: TerrainTile) -> void:
+	if moisture_path == "":
+		super(tile)
+		return
+	var n := tile.tiles_per_face
+	var index := (tile.face * n + tile.tile_y) * n + tile.tile_x
+
+	var file := FileAccess.open(moisture_path, FileAccess.READ)
+	file.seek(moisture_level_offsets[tile.level] + index * moisture_tile_bytes)
+	var bytes := file.get_buffer(moisture_tile_bytes)
+
+	for i in range(moisture_tile_bytes):
+		tile.moisture[i] = bytes[i] / 255.0

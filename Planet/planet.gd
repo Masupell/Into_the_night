@@ -366,7 +366,7 @@ func world_from_etopo():
 
 # Tiles baked with tools/bake_tiles.py, level count and tile size come from the baked data
 func world_from_baked_tiles():
-	var source := DiskSource.new("res://data/earth_tiles", earth_meters_per_unit)
+	var source := DiskSource.new("res://data/earth_tiles", earth_meters_per_unit, "res://data/earth_moisture")
 	terrain_data = TerrainData.new(source.max_level, source.tile_size, source)
 
 func generate_world_texture():

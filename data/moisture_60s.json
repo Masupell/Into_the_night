@@ -1,0 +1,42 @@
+{
+  "width": 21600,
+  "height": 10800,
+  "format": "uint8_moisture",
+  "layout": "row 0 = 90N, column 0 = 180W, pixel centers, value / 255 = moisture",
+  "source": "ai_v31_yr.tif (Global Aridity Index v3.1, Zomer & Trabucco, CC BY 4.0)",
+  "ai_to_moisture": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.03,
+      0.05
+    ],
+    [
+      0.2,
+      0.2
+    ],
+    [
+      0.5,
+      0.38
+    ],
+    [
+      0.65,
+      0.5
+    ],
+    [
+      1.0,
+      0.62
+    ],
+    [
+      1.5,
+      0.8
+    ],
+    [
+      2.5,
+      1.0
+    ]
+  ],
+  "downsample": 2
+}
