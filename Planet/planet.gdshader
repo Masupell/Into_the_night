@@ -20,7 +20,16 @@ uniform float meters_per_unit = 8849.0; // set by the planet (earth_meters_per_u
 uniform vec2 grass_band = vec2(2.0, 10.0);
 uniform vec2 dark_grass_band = vec2(700.0, 885.0);
 uniform vec2 rock_band = vec2(1600.0, 1770.0);
-uniform vec2 snow_band = vec2(3300.0, 3450.0);
+
+// Temperature: annual mean in °C, from the latitude and the height (for now, real climate data later)
+// sea level: equator_temperature at the equator down to pole_temperature at the poles, temperature_curve shapes it
+// (1.5: about 18 °C at 30°, 10 °C at 45°, 1 °C at 60°), then it gets colder by lapse_rate per real km up
+uniform float equator_temperature = 27.0;
+uniform float pole_temperature = -20.0;
+uniform float temperature_curve = 1.5;
+uniform float lapse_rate = 6.5;
+// Snow (and ice) on land from the first to the second temperature
+uniform vec2 snow_temperature_band = vec2(-6.0, -9.0);
 
 // 0: smooth terrain normals from the mesh, 1: flat triangles (low poly look)
 uniform float facet_amount : hint_range(0.0, 1.0) = 0.75;
@@ -73,7 +82,12 @@ void fragment()
 	float to_grass = smoothstep(grass_band.x, grass_band.y, meters);
 	float to_dark_grass = smoothstep(dark_grass_band.x, dark_grass_band.y, meters);
 	float to_rock = smoothstep(rock_band.x, rock_band.y, meters);
-	float to_snow = smoothstep(snow_band.x, snow_band.y, meters);
+
+	vec3 up = normalize(v_world_pos - planet_center);
+	float latitude = asin(clamp(abs(up.y), 0.0, 1.0)) / (PI * 0.5); // 0 equator, 1 pole (the planet never rotates)
+	float sea_temperature = mix(equator_temperature, pole_temperature, pow(latitude, temperature_curve));
+	float temperature = sea_temperature - lapse_rate * max(meters, 0.0) / 1000.0;
+	float to_snow = smoothstep(snow_temperature_band.x, snow_temperature_band.y, temperature) * step(0.0, meters);
 
 	vec3 final_albedo = seabed_color;
     final_albedo = mix(final_albedo, grass_color, to_grass);
@@ -107,8 +121,6 @@ void fragment()
 	    float is_border = 1.0 - (edge_bottom_left.x * edge_bottom_left.y * edge_top_right.x * edge_top_right.y);
 	    final_albedo = mix(final_albedo, vec3(1.0, 1.0, 1.0), is_border);
 	}
-
-	vec3 up = normalize(v_world_pos - planet_center);
 
 	float camera_height = length(CAMERA_POSITION_WORLD - planet_center) - planet_radius;
 	if (v_height < 0.0 && camera_height > 0.0 && !show_lod && !show_borders)
