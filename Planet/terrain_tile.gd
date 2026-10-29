@@ -13,6 +13,10 @@ var size: int # pixels per edge
 var tiles_per_face: int # per edge, 2^level
 
 var heights: PackedFloat32Array
+# 0 = desert, 1 = rainforest. Changes slowly, so a coarser grid over the same square as the heights,
+# MOISTURE_SIZE - 1 has to divide size - 1 so its pixels land on height pixels (and on the tile borders)
+const MOISTURE_SIZE := 33
+var moisture: PackedFloat32Array
 
 func _init(_face: int, _level: int, _tile_x: int, _tile_y: int, _size: int) -> void:
 	face = _face
@@ -22,6 +26,7 @@ func _init(_face: int, _level: int, _tile_x: int, _tile_y: int, _size: int) -> v
 	size = _size
 	tiles_per_face = 1 << level
 	heights.resize(size * size)
+	moisture.resize(MOISTURE_SIZE * MOISTURE_SIZE)
 
 func get_height(x: int, y: int) -> float:
 	return heights[x + y * size]
@@ -32,6 +37,13 @@ func set_height(x: int, y: int, value: float):
 # Direction on the sphere of a tile pixel. Uses whole face pixel coordinates,
 # so a shared border pixel gives exactly the same direction in both tiles
 func pixel_to_dir(x: int, y: int) -> Vector3:
-	var face_pixels := float(tiles_per_face * (size - 1))
-	var uv := Vector2(tile_x * (size - 1) + x, tile_y * (size - 1) + y) / face_pixels
+	return grid_to_dir(x, y, size)
+
+# Same for a pixel of the moisture grid
+func moisture_pixel_to_dir(x: int, y: int) -> Vector3:
+	return grid_to_dir(x, y, MOISTURE_SIZE)
+
+func grid_to_dir(x: int, y: int, grid_size: int) -> Vector3:
+	var face_pixels := float(tiles_per_face * (grid_size - 1))
+	var uv := Vector2(tile_x * (grid_size - 1) + x, tile_y * (grid_size - 1) + y) / face_pixels
 	return CubeSphere.face_to_sphere(face, uv)

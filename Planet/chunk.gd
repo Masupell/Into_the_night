@@ -177,7 +177,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var grid := ChunkGrid.for_size(grid_size) # triangles and uvs, the same for every chunk of this size
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
-	var heights = PackedVector2Array() # terrain height for the shader in x (UV2), float, so it can be negative
+	var heights = PackedVector2Array() # for the shader (UV2): terrain height in x (float, so it can be negative), moisture in y
 
 	vertices.resize(total_vertices_all)
 	normals.resize(total_vertices_all)
@@ -203,6 +203,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var ext_size: int = num_vertices + 2
 	var ext_count: int = ext_size * ext_size
 	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size, 1)
+	var moistures := sampler.sample_moisture_grid(uv_min, uv_max, grid_size)
 	var sphere_points := PackedVector3Array() # 32 bit is fine for directions, noise and normals
 	sphere_points.resize(ext_count)
 	var ext_cache := PackedFloat64Array() # x, y, z of the sphere points, double precision
@@ -269,7 +270,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			max_surface = maxf(max_surface, surface)
 			vertices[idx] = positions[e]
 			ups[idx] = sphere_points[e].normalized()
-			heights[idx] = Vector2(macro_height_ratio, 0.0)
+			heights[idx] = Vector2(macro_height_ratio, moistures[idx])
 
 			# Smooth normal of the terrain: from the neighbours left/right and above/below, pointing away from the planet
 			var normal := (positions[e + 1] - positions[e - 1]).cross(positions[e + ext_size] - positions[e - ext_size])

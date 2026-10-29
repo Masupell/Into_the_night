@@ -80,6 +80,44 @@ func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int =
 				+ wy.w * (wx.x * h[r3 + xa] + wx.y * h[r3 + x0] + wx.z * h[r3 + x0 + 1] + wx.w * h[r3 + xb]))
 	return result
 
+# Moisture of a whole chunk grid ((grid_size + 1)^2, row by row, no border). Bilinear: the moisture grid is coarse
+# and only colors the ground, so it doesn't need the smooth slopes of bicubic. One call per chunk, same as sample_grid
+func sample_moisture_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
+	var n := grid_size + 1
+	var size := TerrainTile.MOISTURE_SIZE
+	var step := size - 1
+	var xs := PackedInt32Array()
+	var txs := PackedFloat32Array()
+	var ys := PackedInt32Array()
+	var tys := PackedFloat32Array()
+	xs.resize(n)
+	txs.resize(n)
+	ys.resize(n)
+	tys.resize(n)
+	for i in range(n):
+		var t := float(i) / grid_size
+		var x := clampf((((uv_min.x * (1.0 - t) + uv_max.x * t) * tile.tiles_per_face) - tile.tile_x) * step, 0.0, step)
+		var y := clampf((((uv_min.y * (1.0 - t) + uv_max.y * t) * tile.tiles_per_face) - tile.tile_y) * step, 0.0, step)
+		xs[i] = first_pixel(x, step)
+		ys[i] = first_pixel(y, step)
+		txs[i] = x - xs[i]
+		tys[i] = y - ys[i]
+
+	var m := tile.moisture
+	var result := PackedFloat32Array()
+	result.resize(n * n)
+	for j in range(n):
+		var r0 := ys[j] * size
+		var r1 := r0 + size
+		var ty := tys[j]
+		for i in range(n):
+			var x0 := xs[i]
+			var tx := txs[i]
+			var top := m[r0 + x0] * (1.0 - tx) + m[r0 + x0 + 1] * tx
+			var bottom := m[r1 + x0] * (1.0 - tx) + m[r1 + x0 + 1] * tx
+			result[i + j * n] = top * (1.0 - ty) + bottom * ty
+	return result
+
 # Position in pixels along one axis inside this tile, from a face uv coordinate
 func pixel_pos(uv: float, tile_index: int) -> float:
 	var step := tile.size - 1

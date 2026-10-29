@@ -22,7 +22,7 @@ func _init(_path: String, _meters_per_unit: float) -> void:
 	for entry in info["levels"]:
 		level_offsets.append(int(entry["offset"]))
 
-func fill_tile(tile: TerrainTile) -> void:
+func fill_heights(tile: TerrainTile) -> void:
 	assert(tile.size == tile_size and tile.level <= max_level, "DiskSource: tile does not match the baked data")
 	var n := tile.tiles_per_face
 	var index := (tile.face * n + tile.tile_y) * n + tile.tile_x

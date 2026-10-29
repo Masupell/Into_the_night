@@ -6,11 +6,15 @@ instance uniform float instance_lod_level;
 
 uniform sampler2D world_map;
 varying float v_height;
+varying float v_moisture;
 varying vec3 v_world_pos;
 
 uniform vec3 seabed_color: source_color = vec3(0.55, 0.48, 0.38);
 uniform vec3 grass_color: source_color = vec3(0.1, 0.4, 0.1);
 uniform vec3 dark_grass_color: source_color = vec3(0.12, 0.28, 0.12);
+uniform vec3 forest_color: source_color = vec3(0.04, 0.25, 0.06);
+uniform vec3 savanna_color: source_color = vec3(0.55, 0.5, 0.25);
+uniform vec3 desert_color: source_color = vec3(0.8, 0.66, 0.44);
 uniform vec3 rock_color: source_color = vec3(0.4, 0.3, 0.2);
 uniform vec3 tundra_color: source_color = vec3(0.42, 0.4, 0.28);
 uniform vec3 snow_color: source_color = vec3(1.0);
@@ -33,6 +37,11 @@ uniform float lapse_rate = 6.5;
 uniform vec2 tundra_temperature_band = vec2(3.0, -2.0);
 // Snow (and ice) on land from the first to the second temperature
 uniform vec2 snow_temperature_band = vec2(-6.0, -9.0);
+
+// Moisture (0 desert, 1 rainforest, 0.5 is plain grass): over the grass, from the first to the second value
+uniform vec2 forest_moisture_band = vec2(0.6, 0.8);
+uniform vec2 savanna_moisture_band = vec2(0.45, 0.3);
+uniform vec2 desert_moisture_band = vec2(0.25, 0.1);
 
 // 0: smooth terrain normals from the mesh, 1: flat triangles (low poly look)
 uniform float facet_amount : hint_range(0.0, 1.0) = 0.75;
@@ -63,6 +72,7 @@ uniform float water_depth_scale = 8.0; // meters of water along the view until i
 void vertex()
 {
     v_height = UV2.x; // height relative to sea level (0), 1 = max_height
+	v_moisture = UV2.y;
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
@@ -93,9 +103,17 @@ void fragment()
 	float to_tundra = smoothstep(tundra_temperature_band.x, tundra_temperature_band.y, temperature) * to_grass; // beaches stay sand
 	float to_snow = smoothstep(snow_temperature_band.x, snow_temperature_band.y, temperature) * step(0.0, meters);
 
+	// only on land, like the tundra: the seabed and the beaches stay as they are
+	float to_forest = smoothstep(forest_moisture_band.x, forest_moisture_band.y, v_moisture) * to_grass;
+	float to_savanna = smoothstep(savanna_moisture_band.x, savanna_moisture_band.y, v_moisture) * to_grass;
+	float to_desert = smoothstep(desert_moisture_band.x, desert_moisture_band.y, v_moisture) * to_grass;
+
 	vec3 final_albedo = seabed_color;
     final_albedo = mix(final_albedo, grass_color, to_grass);
     final_albedo = mix(final_albedo, dark_grass_color, to_dark_grass);
+    final_albedo = mix(final_albedo, forest_color, to_forest);
+    final_albedo = mix(final_albedo, savanna_color, to_savanna);
+    final_albedo = mix(final_albedo, desert_color, to_desert);
     final_albedo = mix(final_albedo, tundra_color, to_tundra);
     final_albedo = mix(final_albedo, rock_color, to_rock);
     final_albedo = mix(final_albedo, snow_color, to_snow);
