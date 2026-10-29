@@ -99,6 +99,13 @@ void fragment()
 
 	ray_end = min(ray_end, terrain_dist);
 
+	// The water isn't in the depth buffer (transparent), so above water the view ends at the sea surface, not at the
+	// sea floor. Otherwise underwater mountains get less haze than the valleys between them and show through the water
+	if (length(ray_origin - planet_center) > planet_radius) {
+		vec2 sea_hit = ray_sphere_intersect(ray_origin, ray_dir, planet_center, planet_radius);
+		if (sea_hit.x > 0.0) ray_end = min(ray_end, sea_hit.x);
+	}
+
 	float path_length = ray_end - ray_start;
 	if (path_length <= 0.0) discard;
 

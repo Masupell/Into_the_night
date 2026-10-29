@@ -353,7 +353,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	mesh_array[Mesh.ARRAY_TEX_UV2] = heights
 	mesh_array[Mesh.ARRAY_TEX_UV] = grid.terrain_uvs
 
-	var water_data = calculate_water_mesh(grid, grid_size, radius, terrain_center, min_chunk_height, sphere_points_cache)
+	var water_data = calculate_water_mesh(grid, grid_size, radius, height, terrain_center, min_chunk_height, sphere_points_cache, heights)
 
 	return {
 		"mesh_array": mesh_array,
@@ -390,7 +390,9 @@ static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVe
 		result[i] = macro_height + detail * detail_strength * land * detail_height_scale
 	return result
 
-static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array) -> Dictionary:
+# terrain_heights: the terrain's UV2 (height / max_height), the water gets the depth of the ground under it in meters
+# (UV2.x), the water shader uses it for how much water the view goes through
+static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float, height: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array, terrain_heights: PackedVector2Array) -> Dictionary:
 	if min_terrain_height > 0.1:
 		return { "should_render": false }
 
@@ -402,9 +404,11 @@ static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float,
 
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
+	var depths = PackedVector2Array()
 
 	vertices.resize(total_vertices)
 	normals.resize(total_vertices)
+	depths.resize(total_vertices)
 
 	for y in range(num_vertices):
 		for x in range(num_vertices):
@@ -416,11 +420,13 @@ static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float,
 
 			vertices[idx] = Vector3(sx * radius - terrain_center[0], sy * radius - terrain_center[1], sz * radius - terrain_center[2])
 			normals[idx] = Vector3(sx, sy, sz)
+			depths[idx] = Vector2(maxf(0.0, -terrain_heights[idx].x * height), 0.0) # below sea level there is no detail noise
 
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = grid.water_indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_TEX_UV] = grid.water_uvs
+	mesh_array[Mesh.ARRAY_TEX_UV2] = depths
 
 	return {
 		"should_render": true,

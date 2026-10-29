@@ -108,6 +108,9 @@ func _ready() -> void:
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = preload("res://Planet/planet.gdshader")
 	terrain_material.set_shader_parameter("world_map", world_texture)
+	terrain_material.set_shader_parameter("planet_radius", radius)
+	terrain_material.set_shader_parameter("max_height", max_height)
+	terrain_material.set_shader_parameter("meters_per_unit", earth_meters_per_unit)
 
 	water_material = ShaderMaterial.new()
 	water_material.shader = preload("res://Planet/water.gdshader")
@@ -491,13 +494,13 @@ func teleport_plane(target: Vector3):
 func move_plane_to_view():
 	var view_camera := get_viewport().get_camera_3d()
 	var look := -view_camera.global_basis.z
-	var plane_position: Vector3 = view_camera.global_position + look * plane.spring_arm.spring_length
-	var up := (get_true_position() + plane_position).normalized()
+	var plane_pos: Vector3 = view_camera.global_position + look * plane.spring_arm.spring_length
+	var up := (get_true_position() + plane_pos).normalized()
 	var forward := look.slide(up).normalized()
 	if forward.length_squared() < 0.001: # looking straight up or down
 		forward = view_camera.global_basis.y.slide(up).normalized()
 
-	plane.global_position = plane_position # if the plane is main (debug camera), it moves the origin there itself next physics frame
+	plane.global_position = plane_pos # if the plane is main (debug camera), it moves the origin there itself next physics frame
 	plane.global_basis = Basis.looking_at(-forward, up) # the plane flies along its +Z
 	plane.pivot.global_basis = Basis.looking_at(forward, up) # camera behind it
 	plane.velocity = Vector3.ZERO
@@ -509,8 +512,8 @@ func switch_to_plane():
 	free_cam.set_debug_mode(false)
 	if main_mode != 1:
 		main_mode = 1
-		var plane_position: Vector3 = plane.global_position
-		shift_origin(plane_position)
+		var plane_pos: Vector3 = plane.global_position
+		shift_origin(plane_pos)
 		plane.global_position = Vector3.ZERO
 	plane.camera.current = true
 	camera = plane.camera

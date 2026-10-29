@@ -14,6 +14,14 @@ uniform vec3 dark_grass_color: source_color = vec3(0.12, 0.28, 0.12);
 uniform vec3 rock_color: source_color = vec3(0.4, 0.3, 0.2);
 uniform vec3 snow_color: source_color = vec3(1.0);
 
+// Height bands in real Earth meters (v_height * meters_per_unit), blending from the first to the second value.
+// The seabed color also is the sand of the beaches
+uniform float meters_per_unit = 8849.0; // set by the planet (earth_meters_per_unit): real meters that are v_height 1
+uniform vec2 grass_band = vec2(2.0, 10.0);
+uniform vec2 dark_grass_band = vec2(700.0, 885.0);
+uniform vec2 rock_band = vec2(1600.0, 1770.0);
+uniform vec2 snow_band = vec2(3300.0, 3450.0);
+
 // 0: smooth terrain normals from the mesh, 1: flat triangles (low poly look)
 uniform float facet_amount : hint_range(0.0, 1.0) = 0.75;
 // Light from the whole sky, not only the sun: without it everything facing away from the sun is black.
@@ -22,6 +30,15 @@ uniform vec3 sky_color : source_color = vec3(0.45, 0.6, 0.85);
 uniform float sky_light = 0.3;
 uniform vec3 sun_dir = vec3(0.0, 0.0, 1.0);
 uniform vec3 planet_center;
+
+// Water: the ground below sea level gets the color of the water in front of it here, not by the water surface mesh.
+// The depth buffer can't separate a water surface from ground a few dm below it further away (the water disappeared
+// over shallow ground), this works at any distance. The water mesh only adds the reflection (water.gdshader)
+uniform float planet_radius; // set by the planet
+uniform float max_height; // set by the planet
+uniform vec3 water_shallow : source_color = vec3(0.1, 0.7, 0.95);
+uniform vec3 water_deep : source_color = vec3(0.04, 0.2, 0.7);
+uniform float water_depth_scale = 8.0; // meters of water along the view until it is mostly deep colored and opaque
 
 
 //float hash3D(vec3 p) // fast 3d hash function I got
@@ -52,11 +69,11 @@ void fragment()
     //float to_dark_grass = smoothstep(0.55, 0.58, v_height);
     //float to_rock = smoothstep(0.70, 0.74, v_height);
     //float to_snow = smoothstep(0.84, 0.86, v_height);
-	// same bands as before, moved down by the old earth map sea level (0.08)
-	float to_grass = smoothstep(-0.01, 0.02, v_height);
-    float to_dark_grass = smoothstep(0.08, 0.10, v_height);
-    float to_rock = smoothstep(0.18, 0.20, v_height);
-    float to_snow = smoothstep(0.37, 0.39, v_height);
+	float meters = v_height * meters_per_unit;
+	float to_grass = smoothstep(grass_band.x, grass_band.y, meters);
+	float to_dark_grass = smoothstep(dark_grass_band.x, dark_grass_band.y, meters);
+	float to_rock = smoothstep(rock_band.x, rock_band.y, meters);
+	float to_snow = smoothstep(snow_band.x, snow_band.y, meters);
 
 	vec3 final_albedo = seabed_color;
     final_albedo = mix(final_albedo, grass_color, to_grass);
@@ -91,9 +108,25 @@ void fragment()
 	    final_albedo = mix(final_albedo, vec3(1.0, 1.0, 1.0), is_border);
 	}
 
+	vec3 up = normalize(v_world_pos - planet_center);
+
+	float camera_height = length(CAMERA_POSITION_WORLD - planet_center) - planet_radius;
+	if (v_height < 0.0 && camera_height > 0.0 && !show_lod && !show_borders)
+	{
+		// the view goes down through the water at an angle until it reaches this ground (Beer-Lambert approximation)
+		float ground_depth = -v_height * max_height; // no detail noise below sea level, so this is exact at the vertices
+		vec3 view_dir = normalize(v_world_pos - CAMERA_POSITION_WORLD);
+		float cos_view = max(dot(-view_dir, up), 0.01);
+		float depth_factor = 1.0 - exp(-ground_depth / cos_view / water_depth_scale);
+		float cover = mix(0.45, 1.0, depth_factor);
+		final_albedo = mix(final_albedo, mix(water_shallow, water_deep, depth_factor), cover);
+		// the more water in front, the more it is lit like a flat water surface instead of the ground below
+		vec3 up_view = (VIEW_MATRIX * vec4(up, 0.0)).xyz;
+		NORMAL = normalize(mix(NORMAL, up_view, cover));
+	}
+
 	ALBEDO = final_albedo;
 
-	vec3 up = normalize(v_world_pos - planet_center);
 	float daylight = smoothstep(-0.1, 0.15, dot(up, sun_dir)); // fades out over dusk
 	vec3 world_normal = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 	float sky_visible = 0.5 + 0.5 * dot(world_normal, up); // a wall sees half the sky, an overhang less
