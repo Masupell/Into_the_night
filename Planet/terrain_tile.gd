@@ -14,9 +14,9 @@ var heights: PackedFloat32Array
 # 0 desert, 1 rainforest. Coarser grid, MOISTURE_SIZE - 1 has to divide size - 1
 const MOISTURE_SIZE := 33
 var moisture: PackedFloat32Array
-# Water surface, same units as the heights. Coarse too, the shore comes from the ground
+# Water surface, same units as the heights, below the ground where there is none.
+# Coarse too, the shore comes from the ground
 const WATER_SIZE := 33
-const NO_WATER := -1000.0
 var water: PackedFloat32Array
 
 func _init(_face: int, _level: int, _tile_x: int, _tile_y: int, _size: int) -> void:

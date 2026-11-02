@@ -1,4 +1,4 @@
-Elevation, moisture and star data, all commands from the project root.
+Elevation, moisture, water and star data, all commands from the project root.
 The game crashes without data/earth_tiles.bin, so this is necessary.
 
 1. Python environment for the tools
@@ -27,9 +27,17 @@ tools/.venv/bin/python tools/convert_aridity.py data/source/ai_v31_yr.tif data/m
 --tile-size must be TerrainTile.MOISTURE_SIZE. Without this file the game runs, but everything has plain grass
 tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
 
-8. Download the star map (NASA SVS Deep Star Maps 2020, 4k EXR, 36 MB) into data/source/. Without it the sky is black
+8. Water level, only the ocean for now (data/water_30s.bin, 1.9 GB, needs ~16 GB RAM, ~1 min)
+tools/.venv/bin/python tools/convert_water.py data/etopo_30s data/water_30s
+
+9. Bake the water tiles (data/earth_water.bin, 0.29 GB, ~17 s). --max-level must be the same as in step 4,
+--tile-size must be TerrainTile.WATER_SIZE. Without this file everything below sea level is water
+tools/.venv/bin/python tools/bake_tiles.py data/water_30s data/earth_water --max-level 7 --tile-size 33
+
+10. Download the star map (NASA SVS Deep Star Maps 2020, 4k EXR, 36 MB) into data/source/. Without it the sky is black
 Credit: NASA/Goddard Space Flight Center Scientific Visualization Studio, Gaia DR2: ESA/Gaia/DPAC, https://svs.gsfc.nasa.gov/4851
 curl -L -o data/source/starmap_2020_4k.exr https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/starmap_2020_4k.exr
 
-Afterwards data/source/ (except the star map), data/etopo_30s.bin and data/moisture_60s.bin are only needed to bake again.
+Afterwards data/source/ (except the star map), data/etopo_30s.bin, data/moisture_60s.bin and data/water_30s.bin
+are only needed to bake again.
 Smaller/older alternative: the 60s file (60s_surface_elev_gtif, 0.5 GB) with --max-level 6 gives a 1.1 GB earth_tiles.bin

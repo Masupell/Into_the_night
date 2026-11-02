@@ -390,7 +390,7 @@ func world_from_etopo():
 
 # Baked with tools/bake_tiles.py
 func world_from_baked_tiles():
-	var source := DiskSource.new("res://data/earth_tiles", earth_meters_per_unit, "res://data/earth_moisture")
+	var source := DiskSource.new("res://data/earth_tiles", earth_meters_per_unit, "res://data/earth_moisture", "res://data/earth_water")
 	terrain_data = TerrainData.new(source.max_level, source.tile_size, source)
 
 func generate_world_texture():

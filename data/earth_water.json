@@ -1,0 +1,42 @@
+{
+  "format": "int16_le_water_meters",
+  "tile_size": 33,
+  "max_level": 7,
+  "tile_bytes": 2178,
+  "levels": [
+    {
+      "level": 0,
+      "offset": 0
+    },
+    {
+      "level": 1,
+      "offset": 13068
+    },
+    {
+      "level": 2,
+      "offset": 65340
+    },
+    {
+      "level": 3,
+      "offset": 274428
+    },
+    {
+      "level": 4,
+      "offset": 1110780
+    },
+    {
+      "level": 5,
+      "offset": 4456188
+    },
+    {
+      "level": 6,
+      "offset": 17837820
+    },
+    {
+      "level": 7,
+      "offset": 71364348
+    }
+  ],
+  "layout": "level offset + ((face * n + tile_y) * n + tile_x) * tile_bytes, n = 2^level, pixels x + y * tile_size",
+  "source": "ETOPO_2022_v1_30s_N90W180_surface.tif"
+}

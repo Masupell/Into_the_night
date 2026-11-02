@@ -1,4 +1,4 @@
-"""Bakes the tile pyramid from a converted equirect file (heights or moisture) into one pack file.
+"""Bakes the tile pyramid from a converted equirect file (heights, moisture or water) into one pack file.
 
 Must match CubeSphere.FACES / face_to_sphere, TerrainTile.pixel_to_dir and EquirectSource.get_uv / sample.
 
@@ -10,7 +10,8 @@ Output:
 Usage (from the project root):
   tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
   tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
-  (moisture: --tile-size = TerrainTile.MOISTURE_SIZE, --max-level same as the heights)
+  tools/.venv/bin/python tools/bake_tiles.py data/water_30s data/earth_water --max-level 7 --tile-size 33
+  (moisture / water: --tile-size = TerrainTile.MOISTURE_SIZE / WATER_SIZE, --max-level same as the heights)
 """
 
 import argparse
@@ -24,6 +25,7 @@ import numpy as np
 FORMATS = {
     "int16_le_meters": np.dtype("<i2"),
     "uint8_moisture": np.dtype("u1"),
+    "int16_le_water_meters": np.dtype("<i2"),
 }
 
 # CubeSphere.FACES: [top_left, top_right, bottom_right, bottom_left]

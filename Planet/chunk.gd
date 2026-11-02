@@ -202,7 +202,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var min_surface := INF
 	var max_surface := -INF
 
-	# No GDScript function calls in the vertex loops, they block each other between threads (native ones are fine)
+	# No GDScript function calls in the vertex loops, they block each other between threads
 	# Extra ring of vertices around the chunk, only for the normals, so the edges don't show
 	var ext_size: int = num_vertices + 2
 	var ext_count: int = ext_size * ext_size
@@ -475,7 +475,7 @@ static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float,
 		var sy := sphere_points_cache[idx * 3 + 1]
 		var sz := sphere_points_cache[idx * 3 + 2]
 
-		# flat at the water level, NO_WATER only down to a bit under the ground
+		# flat at the water level, but not too far under the ground
 		var ground := terrain_heights[idx].x
 		var r := radius + maxf(water_levels[idx], ground - 1.0) * height
 		vertices[idx] = Vector3(sx * r - terrain_center[0], sy * r - terrain_center[1], sz * r - terrain_center[2])
