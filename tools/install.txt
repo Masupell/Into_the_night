@@ -1,4 +1,4 @@
-Elevation, moisture and star data (not tracked by git), all commands from the project root.
+Elevation, moisture and star data, all commands from the project root.
 The game crashes without data/earth_tiles.bin, so this is necessary.
 
 1. Python environment for the tools
