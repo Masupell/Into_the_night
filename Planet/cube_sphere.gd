@@ -1,8 +1,8 @@
 class_name CubeSphere
 extends RefCounted
 
-## Cube (6 faces, uv 0..1) <-> unit sphere
-## Face corners: [top_left, top_right, bottom_right, bottom_left]
+# Cube (6 faces, uv 0..1) <-> unit sphere
+# Face corners: [top_left, top_right, bottom_right, bottom_left]
 
 const FACES: Array = [
 	[Vector3(-1, 1, 1), Vector3( 1, 1, 1), Vector3( 1,-1, 1), Vector3(-1,-1, 1)], # 0 Front (+Z)

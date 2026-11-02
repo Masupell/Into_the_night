@@ -2,7 +2,6 @@ shader_type sky;
 
 // Star map: NASA SVS Deep Star Maps 2020 (svs.gsfc.nasa.gov/4851)
 // Credit: NASA/Goddard Space Flight Center Scientific Visualization Studio, Gaia DR2: ESA/Gaia/DPAC
-// Set in Sky/sky.gd. Linear HDR, so no source_color
 uniform sampler2D star_map : filter_linear_mipmap, repeat_enable;
 uniform float star_brightness = 1.0;
 // Set by Planet.update_star_visibility
@@ -31,9 +30,12 @@ vec3 sun(vec3 dir, vec3 sun_dir)
 void sky()
 {
 	// Ambient and reflections don't come from the sky
-	if (AT_CUBEMAP_PASS) {
+	if (AT_CUBEMAP_PASS)
+	{
 		COLOR = vec3(0.0);
-	} else {
+	}
+	else
+	{
 		vec3 dir = normalize(EYEDIR);
 		vec3 sun_dir = LIGHT0_DIRECTION;
 
