@@ -121,10 +121,10 @@ func center_distance(pos: Vector3) -> float:
 func surface_distance(pos: Vector3) -> float:
 	return maxf(0.0, center_distance(pos) - half_diagonal)
 
-# Under water the water surface at 0 counts too
+# Water surface included
 func set_surface_range(height_range: Vector2):
 	surface_min = height_range.x
-	surface_max = maxf(height_range.y, 0.0) if height_range.x < 0.0 else height_range.y
+	surface_max = height_range.y
 
 func are_children_ready() -> bool:
 	if children.is_empty():

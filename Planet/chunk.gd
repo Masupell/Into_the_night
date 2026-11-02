@@ -5,6 +5,7 @@ const DETAIL_TUNED_FOR_HEIGHT := 200.0 # detail noise was tuned for these
 const DETAIL_TUNED_FOR_RADIUS := 5000.0
 
 const MORPH_FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+const WATER_FORMAT := Mesh.ARRAY_CUSTOM_R_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT
 const NO_MORPH := -1000.0
 
 var water_mesh_instance: MeshInstance3D
@@ -127,7 +128,7 @@ func apply_generation_results(total_data: Dictionary):
 
 	# Terrain
 	var terrain_mesh = ArrayMesh.new()
-	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data, [], {}, MORPH_FORMAT)
+	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data, [], {}, MORPH_FORMAT | WATER_FORMAT)
 	self.mesh = terrain_mesh
 
 	collision_vertices = total_data["collision_vertices"]
@@ -182,10 +183,12 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
 	var heights = PackedVector2Array() # UV2: height, moisture
+	var water_levels = PackedFloat32Array() # CUSTOM1
 
 	vertices.resize(total_vertices_all)
 	normals.resize(total_vertices_all)
 	heights.resize(total_vertices_all)
+	water_levels.resize(total_vertices_all)
 
 	var sphere_points_cache = PackedFloat64Array() # for the water
 	sphere_points_cache.resize(total_vertices * 3)
@@ -196,7 +199,6 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var c3: Vector3 = corners[3]
 	var detail_scale := radius / DETAIL_TUNED_FOR_RADIUS
 
-	var min_chunk_height := INF
 	var min_surface := INF
 	var max_surface := -INF
 
@@ -206,6 +208,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var ext_count: int = ext_size * ext_size
 	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size, 1)
 	var moistures := sampler.sample_moisture_grid(uv_min, uv_max, grid_size)
+	var waters := sampler.sample_water_grid(uv_min, uv_max, grid_size)
 	var sphere_points := PackedVector3Array()
 	sphere_points.resize(ext_count)
 	var ext_cache := PackedFloat64Array()
@@ -263,11 +266,13 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			sphere_points_cache[idx * 3 + 2] = ext_cache[e * 3 + 2]
 
 			var macro_height_ratio := macro_ratios[e]
-			if macro_height_ratio < min_chunk_height:
-				min_chunk_height = macro_height_ratio
 			var surface := surfaces[e]
 			min_surface = minf(min_surface, surface)
 			max_surface = maxf(max_surface, surface)
+			var water_level := waters[idx]
+			if water_level > macro_height_ratio:
+				max_surface = maxf(max_surface, water_level * height)
+			water_levels[idx] = water_level
 			vertices[idx] = positions[e]
 			ups[idx] = sphere_points[e].normalized()
 			heights[idx] = Vector2(macro_height_ratio, moistures[idx])
@@ -313,6 +318,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			vertices[curr_idx] = vertices[prev_idx].lerp(vertices[next_idx], 0.5)
 			normals[curr_idx] = (normals[prev_idx] + normals[next_idx]).normalized()
 			heights[curr_idx] = heights[prev_idx].lerp(heights[next_idx], 0.5)
+			water_levels[curr_idx] = (water_levels[prev_idx] + water_levels[next_idx]) * 0.5
 
 	# Geomorphing: offset to the parent's surface (xyz) and height (w), the shader slides it to the real one.
 	# In between vertices take the average of their neighbours on the parent edge. Borders don't morph
@@ -352,6 +358,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
+		water_levels[s_idx] = water_levels[src_idx]
 
 	for x in range(num_vertices):
 		var src_idx = x + grid_size * num_vertices # south edge
@@ -359,6 +366,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
+		water_levels[s_idx] = water_levels[src_idx]
 
 	for y in range(num_vertices):
 		var src_idx = y * num_vertices # west edge
@@ -366,6 +374,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
+		water_levels[s_idx] = water_levels[src_idx]
 
 	for y in range(num_vertices):
 		var src_idx = grid_size + y * num_vertices # east edge
@@ -373,6 +382,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		vertices[s_idx] = vertices[src_idx] - ups[src_idx] * skirt_depth
 		normals[s_idx] = normals[src_idx]
 		heights[s_idx] = heights[src_idx]
+		water_levels[s_idx] = water_levels[src_idx]
 
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = grid.terrain_indices
@@ -380,8 +390,10 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	mesh_array[Mesh.ARRAY_TEX_UV2] = heights
 	mesh_array[Mesh.ARRAY_TEX_UV] = grid.terrain_uvs
 	mesh_array[Mesh.ARRAY_CUSTOM0] = morph_offsets
+	mesh_array[Mesh.ARRAY_CUSTOM1] = water_levels
 
-	var water_data = calculate_water_mesh(grid, grid_size, radius, height, terrain_center, min_chunk_height, sphere_points_cache, heights)
+	var water_data = calculate_water_mesh(grid, grid_size, radius, height, terrain_center, sphere_points_cache, heights, water_levels)
+
 
 	return {
 		"mesh_array": mesh_array,
@@ -415,16 +427,40 @@ static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVe
 		result[i] = macro_height + detail * detail_strength * land * detail_height_scale
 	return result
 
-# The water gets the depth of the ground under it (UV2.x)
-static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float, height: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array, terrain_heights: PackedVector2Array) -> Dictionary:
-	if min_terrain_height > 0.1:
+# Only cells with water, at the water level. The water gets the depth of the ground under it (UV2.x)
+static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float, height: float, terrain_center: PackedFloat64Array, sphere_points_cache: PackedFloat64Array, terrain_heights: PackedVector2Array, water_levels: PackedFloat32Array) -> Dictionary:
+	var num_vertices = grid_size + 1
+	var total_vertices = num_vertices * num_vertices
+
+	# 0.1 above the ground still counts, the detail noise can dip the shore below the water
+	var wet := PackedByteArray()
+	wet.resize(total_vertices)
+	var wet_count := 0
+	for idx in range(total_vertices):
+		if water_levels[idx] > terrain_heights[idx].x - 0.1:
+			wet[idx] = 1
+			wet_count += 1
+	if wet_count == 0:
 		return { "should_render": false }
+
+	var indices: PackedInt32Array = grid.water_indices
+	if wet_count < total_vertices:
+		var all_indices := indices
+		indices = PackedInt32Array()
+		indices.resize(all_indices.size())
+		var count := 0
+		for y in range(grid_size):
+			for x in range(grid_size):
+				var i: int = x + y * num_vertices
+				if wet[i] or wet[i + 1] or wet[i + num_vertices] or wet[i + num_vertices + 1]:
+					var cell: int = (x + y * grid_size) * 6
+					for k in range(6):
+						indices[count + k] = all_indices[cell + k]
+					count += 6
+		indices.resize(count)
 
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
-
-	var num_vertices = grid_size + 1
-	var total_vertices = num_vertices * num_vertices
 
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
@@ -434,20 +470,20 @@ static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float,
 	normals.resize(total_vertices)
 	depths.resize(total_vertices)
 
-	for y in range(num_vertices):
-		for x in range(num_vertices):
-			var idx = x + (y * num_vertices)
+	for idx in range(total_vertices):
+		var sx := sphere_points_cache[idx * 3]
+		var sy := sphere_points_cache[idx * 3 + 1]
+		var sz := sphere_points_cache[idx * 3 + 2]
 
-			var sx := sphere_points_cache[idx * 3]
-			var sy := sphere_points_cache[idx * 3 + 1]
-			var sz := sphere_points_cache[idx * 3 + 2]
-
-			vertices[idx] = Vector3(sx * radius - terrain_center[0], sy * radius - terrain_center[1], sz * radius - terrain_center[2])
-			normals[idx] = Vector3(sx, sy, sz)
-			depths[idx] = Vector2(maxf(0.0, -terrain_heights[idx].x * height), 0.0)
+		# flat at the water level, NO_WATER only down to a bit under the ground
+		var ground := terrain_heights[idx].x
+		var r := radius + maxf(water_levels[idx], ground - 1.0) * height
+		vertices[idx] = Vector3(sx * r - terrain_center[0], sy * r - terrain_center[1], sz * r - terrain_center[2])
+		normals[idx] = Vector3(sx, sy, sz)
+		depths[idx] = Vector2(maxf(0.0, (water_levels[idx] - ground) * height), 0.0)
 
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
-	mesh_array[Mesh.ARRAY_INDEX] = grid.water_indices
+	mesh_array[Mesh.ARRAY_INDEX] = indices
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_TEX_UV] = grid.water_uvs
 	mesh_array[Mesh.ARRAY_TEX_UV2] = depths

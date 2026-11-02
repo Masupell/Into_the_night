@@ -14,6 +14,10 @@ var heights: PackedFloat32Array
 # 0 desert, 1 rainforest. Coarser grid, MOISTURE_SIZE - 1 has to divide size - 1
 const MOISTURE_SIZE := 33
 var moisture: PackedFloat32Array
+# Water surface, same units as the heights. Coarse too, the shore comes from the ground
+const WATER_SIZE := 33
+const NO_WATER := -1000.0
+var water: PackedFloat32Array
 
 func _init(_face: int, _level: int, _tile_x: int, _tile_y: int, _size: int) -> void:
 	face = _face
@@ -24,6 +28,7 @@ func _init(_face: int, _level: int, _tile_x: int, _tile_y: int, _size: int) -> v
 	tiles_per_face = 1 << level
 	heights.resize(size * size)
 	moisture.resize(MOISTURE_SIZE * MOISTURE_SIZE)
+	water.resize(WATER_SIZE * WATER_SIZE)
 
 func get_height(x: int, y: int) -> float:
 	return heights[x + y * size]

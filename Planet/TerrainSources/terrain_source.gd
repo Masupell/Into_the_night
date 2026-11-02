@@ -12,6 +12,7 @@ func moisture_at(_dir: Vector3) -> float:
 func fill_tile(tile: TerrainTile) -> void:
 	fill_heights(tile)
 	fill_moisture(tile)
+	fill_water(tile)
 
 func fill_heights(tile: TerrainTile) -> void:
 	for y in range(tile.size):
@@ -23,3 +24,7 @@ func fill_moisture(tile: TerrainTile) -> void:
 	for y in range(n):
 		for x in range(n):
 			tile.moisture[x + y * n] = moisture_at(tile.moisture_pixel_to_dir(x, y))
+
+# Sea level everywhere
+func fill_water(tile: TerrainTile) -> void:
+	tile.water.fill(0.0)

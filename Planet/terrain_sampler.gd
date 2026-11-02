@@ -74,10 +74,15 @@ func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int =
 				+ wy.w * (wx.x * h[r3 + xa] + wx.y * h[r3 + x0] + wx.z * h[r3 + x0 + 1] + wx.w * h[r3 + xb]))
 	return result
 
-# Moisture of a whole chunk grid, bilinear is enough here
 func sample_moisture_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
+	return sample_coarse_grid(tile.moisture, TerrainTile.MOISTURE_SIZE, uv_min, uv_max, grid_size)
+
+func sample_water_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
+	return sample_coarse_grid(tile.water, TerrainTile.WATER_SIZE, uv_min, uv_max, grid_size)
+
+# Whole chunk grid from one of the coarse grids, bilinear is enough here
+func sample_coarse_grid(m: PackedFloat32Array, size: int, uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
 	var n := grid_size + 1
-	var size := TerrainTile.MOISTURE_SIZE
 	var step := size - 1
 	var xs := PackedInt32Array()
 	var txs := PackedFloat32Array()
@@ -96,7 +101,6 @@ func sample_moisture_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> P
 		txs[i] = x - xs[i]
 		tys[i] = y - ys[i]
 
-	var m := tile.moisture
 	var result := PackedFloat32Array()
 	result.resize(n * n)
 	for j in range(n):
