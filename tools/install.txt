@@ -1,4 +1,4 @@
-Elevation and moisture data (not tracked by git), all commands from the project root.
+Elevation, moisture and star data (not tracked by git), all commands from the project root.
 The game crashes without data/earth_tiles.bin, so this is necessary.
 
 1. Python environment for the tools
@@ -27,5 +27,9 @@ tools/.venv/bin/python tools/convert_aridity.py data/source/ai_v31_yr.tif data/m
 --tile-size must be TerrainTile.MOISTURE_SIZE. Without this file the game runs, but everything has plain grass
 tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
 
-Afterwards data/source/, data/etopo_30s.bin and data/moisture_60s.bin are only needed to bake again.
+8. Download the star map (NASA SVS Deep Star Maps 2020, 4k EXR, 36 MB) into data/source/. Without it the sky is black
+Credit: NASA/Goddard Space Flight Center Scientific Visualization Studio, Gaia DR2: ESA/Gaia/DPAC, https://svs.gsfc.nasa.gov/4851
+curl -L -o data/source/starmap_2020_4k.exr https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/starmap_2020_4k.exr
+
+Afterwards data/source/ (except the star map), data/etopo_30s.bin and data/moisture_60s.bin are only needed to bake again.
 Smaller/older alternative: the 60s file (60s_surface_elev_gtif, 0.5 GB) with --max-level 6 gives a 1.1 GB earth_tiles.bin

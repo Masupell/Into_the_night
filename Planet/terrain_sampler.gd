@@ -1,16 +1,13 @@
 class_name TerrainSampler
 extends RefCounted
 
-# The one tile a chunk samples from, handed to the chunk generation thread.
-# A chunk always lies completely inside one tile of its tile level (both are the same quadtree split),
-# tiles never change after loading, so the thread never touches TerrainData and no locking is needed
+# The tile a chunk samples from, on the chunk thread. Tiles don't change after loading, so no locking
 var tile: TerrainTile
 
 func _init(_tile: TerrainTile) -> void:
 	tile = _tile
 
-# uv is on the whole face, has to be inside this tile (gets clamped onto its border otherwise)
-# Bicubic (Catmull-Rom): 4x4 pixels around the point. Goes exactly through the pixels like bilinear, but without the kinks at them
+# Face uv, bicubic (Catmull-Rom)
 func sample(uv: Vector2) -> float:
 	var step := tile.size - 1
 	var x := pixel_pos(uv.x, tile.tile_x)
@@ -21,7 +18,7 @@ func sample(uv: Vector2) -> float:
 	var wy := weights(y - y0, y0 == 0, y0 + 2 > step)
 
 	var h := tile.heights
-	var xa := maxi(x0 - 1, 0) # pixel before / after the tile only get weight 0, any index inside is fine
+	var xa := maxi(x0 - 1, 0) # outside pixels have weight 0 anyway
 	var xb := mini(x0 + 2, step)
 	var result := 0.0
 	for j in range(4):
@@ -29,11 +26,8 @@ func sample(uv: Vector2) -> float:
 		result += wy[j] * (wx.x * h[row + xa] + wx.y * h[row + x0] + wx.z * h[row + x0 + 1] + wx.w * h[row + xb])
 	return result
 
-# Heights of a whole chunk grid ((grid_size + 1 + 2 * border)^2, row by row), same values as sample() at each vertex.
-# border: extra rows / columns of vertices around the chunk (for the normals at its edges). Those can lie outside
-# this tile, there the height continues in a straight line from the tile's edge.
-# One call per chunk: calls to GDScript functions block each other between threads, so the per vertex loop has none.
-# x only depends on the column and y only on the row, so their pixels and weights are computed once
+# Same as sample() for a whole chunk grid, border is the extra ring for the normals.
+# One call per chunk, no function calls in the loop (threads)
 func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int = 0) -> PackedFloat32Array:
 	var n := grid_size + 1 + 2 * border
 	var step := tile.size - 1
@@ -47,10 +41,10 @@ func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int =
 	wys.resize(n)
 	for i in range(n):
 		var t := float(i - border) / grid_size
-		# a * (1 - t) + b * t, so the edges hit uv_min/uv_max exactly and neighbouring chunks sample the same values
+		# so the edges hit uv_min/uv_max exactly
 		var x := pixel_pos(uv_min.x * (1.0 - t) + uv_max.x * t, tile.tile_x)
 		var y := pixel_pos(uv_min.y * (1.0 - t) + uv_max.y * t, tile.tile_y)
-		if i < border or i >= n - border: # the extra ring may be outside the tile
+		if i < border or i >= n - border:
 			x = pixel_pos_unclamped(uv_min.x * (1.0 - t) + uv_max.x * t, tile.tile_x)
 			y = pixel_pos_unclamped(uv_min.y * (1.0 - t) + uv_max.y * t, tile.tile_y)
 		xs[i] = first_pixel(x, step)
@@ -80,8 +74,7 @@ func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int =
 				+ wy.w * (wx.x * h[r3 + xa] + wx.y * h[r3 + x0] + wx.z * h[r3 + x0 + 1] + wx.w * h[r3 + xb]))
 	return result
 
-# Moisture of a whole chunk grid ((grid_size + 1)^2, row by row, no border). Bilinear: the moisture grid is coarse
-# and only colors the ground, so it doesn't need the smooth slopes of bicubic. One call per chunk, same as sample_grid
+# Moisture of a whole chunk grid, bilinear is enough here
 func sample_moisture_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
 	var n := grid_size + 1
 	var size := TerrainTile.MOISTURE_SIZE
@@ -118,7 +111,7 @@ func sample_moisture_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> P
 			result[i + j * n] = top * (1.0 - ty) + bottom * ty
 	return result
 
-# Position in pixels along one axis inside this tile, from a face uv coordinate
+# Face uv -> pixel position inside this tile
 func pixel_pos(uv: float, tile_index: int) -> float:
 	var step := tile.size - 1
 	return clampf((uv * tile.tiles_per_face - tile_index) * step, 0.0, step)
@@ -126,16 +119,13 @@ func pixel_pos(uv: float, tile_index: int) -> float:
 func pixel_pos_unclamped(uv: float, tile_index: int) -> float:
 	return (uv * tile.tiles_per_face - tile_index) * (tile.size - 1)
 
-# floor, but at most the second to last pixel, so pixel + 1 stays inside the tile (t is 1.0 on the last pixel then).
-# Outside the tile the first / last two pixels, t is then below 0 / above 1
+# floor, but pixel + 1 stays inside the tile
 static func first_pixel(pos: float, step: int) -> int:
 	return clampi(floori(pos), 0, step - 1)
 
-# Catmull-Rom weights of the 4 pixels around t (between pixel 1 and 2): curve through both,
-# the slope at each taken from its two neighbours. A pixel outside the tile (before the first / after the last)
-# is extrapolated in a straight line from the two inside, folded into the weights of those two
+# Catmull-Rom weights, pixels outside the tile are extrapolated linearly
 static func weights(t: float, at_start: bool, at_end: bool) -> Vector4:
-	if t < 0.0 or t > 1.0: # outside the tile: straight line through the two pixels at its edge
+	if t < 0.0 or t > 1.0: # outside the tile
 		return Vector4(0.0, 1.0 - t, t, 0.0)
 	var t2 := t * t
 	var t3 := t2 * t

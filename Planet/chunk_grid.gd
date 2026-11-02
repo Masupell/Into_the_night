@@ -1,18 +1,16 @@
 class_name ChunkGrid
 extends RefCounted
 
-# Everything of a chunk mesh that only depends on the grid size, not on the terrain: the triangles (indices) and UVs
-# of the terrain (with its skirts) and of the water. Made once per grid size and shared by all chunks of that size,
-# instead of every chunk build computing the same again. Only read after it is made, so the worker threads can share it
+# Indices and UVs of the terrain (with skirts) and the water, made once per grid size and shared
 var terrain_indices := PackedInt32Array()
-var terrain_uvs := PackedVector2Array() # skirt vertices have the uv of the edge vertex they hang from
+var terrain_uvs := PackedVector2Array()
 var water_indices := PackedInt32Array()
 var water_uvs := PackedVector2Array()
 
 static var _grids := {} # grid size -> ChunkGrid
 static var _mutex := Mutex.new()
 
-# Called on the worker threads, the first one of a size makes it (the others wait for it)
+# Called on the worker threads
 static func for_size(grid_size: int) -> ChunkGrid:
 	_mutex.lock()
 	if not _grids.has(grid_size):
@@ -28,7 +26,7 @@ func _init(grid_size: int) -> void:
 	var indices := PackedInt32Array()
 	indices.resize(main_index_count + grid_size * 4 * 6)
 
-	# Same order as the vertices in Chunk.calculate_terrain_mesh: the grid row by row, then the skirts north, south, west, east
+	# Same order as in Chunk.calculate_terrain_mesh
 	for y in range(grid_size):
 		for x in range(grid_size):
 			var idx = (x + (y * grid_size)) * 6

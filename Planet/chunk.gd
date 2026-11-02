@@ -1,14 +1,17 @@
 class_name Chunk
 extends MeshInstance3D
 
-const DETAIL_TUNED_FOR_HEIGHT := 200.0 # max_height the detail noise amplitudes below were tuned for, scales with it
-const DETAIL_TUNED_FOR_RADIUS := 5000.0 # radius the detail noise frequencies were tuned for, so features keep their size in meters
+const DETAIL_TUNED_FOR_HEIGHT := 200.0 # detail noise was tuned for these
+const DETAIL_TUNED_FOR_RADIUS := 5000.0
+
+const MORPH_FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+const NO_MORPH := -1000.0
 
 var water_mesh_instance: MeshInstance3D
 
 var active_task_id: int = -1
 var generation_id: int = 1
-var task_result: Dictionary = {} # written by the worker task, only read on the main thread once that task is finished
+var task_result: Dictionary = {} # only read once the task is finished
 
 var is_pending_recycle: bool = false
 var is_ready: bool = false
@@ -19,20 +22,16 @@ var owner_quad: Quad = null
 
 var planet: Planet # Easier with reference right now
 
-# Collider: made by Planet.update_colliders, only near the player and a few per frame (adding one to the physics world
-# is the expensive part). Mesh vertices and triangles are kept for it, the list of triangle corners is only built then
+# Collider, see Planet.update_colliders
 var collision_vertices: PackedVector3Array
 var collision_indices: PackedInt32Array
 var collider: StaticBody3D = null
-var collider_outdated: bool = false # mesh was rebuilt, the old collider stays until the new one is made
+var collider_outdated: bool = false
 
-# Mesh vertices are relative to this point (planet space, double precision), so they stay small and precise.
-# The chunk node sits at center - camera position, computed in doubles, see Planet.shift_origin
+# Mesh vertices are relative to this (doubles), so they stay precise
 var center: PackedFloat64Array
 
-# Called by the planet every frame before the LOD update, so a finished chunk is used in the same frame.
-# The result is picked up here instead of call_deferred from the worker: a deferred call to a chunk that got freed
-# in between (quitting) is an error
+# Not call_deferred, the chunk could be freed in between
 func poll_task() -> void:
 	if active_task_id != -1:
 		if WorkerThreadPool.is_task_completed(active_task_id):
@@ -79,7 +78,12 @@ func completely_reset_and_return():
 	remove_collider()
 	collision_vertices = PackedVector3Array()
 	collision_indices = PackedInt32Array()
+	set_instance_shader_parameter("morph_start", NO_MORPH)
 	planet.return_chunk(self)
+
+# From the parent's shape to the real one
+func start_morph():
+	set_instance_shader_parameter("morph_start", planet.terrain_time)
 
 func build_collider():
 	var faces := PackedVector3Array() # 3 vertices per triangle
@@ -123,7 +127,7 @@ func apply_generation_results(total_data: Dictionary):
 
 	# Terrain
 	var terrain_mesh = ArrayMesh.new()
-	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data)
+	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, terrain_data, [], {}, MORPH_FORMAT)
 	self.mesh = terrain_mesh
 
 	collision_vertices = total_data["collision_vertices"]
@@ -151,8 +155,8 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float):
-	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, terrain_center, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth)
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float, morph_from_parent: bool):
+	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, terrain_center, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth, morph_from_parent)
 	var total_data = {
 		"gen_id": gen_id,
 		"center": terrain_center,
@@ -164,7 +168,7 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 	}
 	chunk_instance.task_result = total_data
 
-static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float) -> Dictionary:
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float, morph_from_parent: bool = false) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 
@@ -174,16 +178,16 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var skirt_vertex_count = num_vertices * 4
 	var total_vertices_all = total_vertices + skirt_vertex_count
 
-	var grid := ChunkGrid.for_size(grid_size) # triangles and uvs, the same for every chunk of this size
+	var grid := ChunkGrid.for_size(grid_size)
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
-	var heights = PackedVector2Array() # for the shader (UV2): terrain height in x (float, so it can be negative), moisture in y
+	var heights = PackedVector2Array() # UV2: height, moisture
 
 	vertices.resize(total_vertices_all)
 	normals.resize(total_vertices_all)
 	heights.resize(total_vertices_all)
 
-	var sphere_points_cache = PackedFloat64Array() # x, y, z per vertex, double precision, for the water
+	var sphere_points_cache = PackedFloat64Array() # for the water
 	sphere_points_cache.resize(total_vertices * 3)
 
 	var c0: Vector3 = corners[0]
@@ -193,26 +197,22 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var detail_scale := radius / DETAIL_TUNED_FOR_RADIUS
 
 	var min_chunk_height := INF
-	var min_surface := INF # real height range in meters (tile + detail noise), for the quads LOD distance
+	var min_surface := INF
 	var max_surface := -INF
 
-	# No calls to GDScript functions in the per vertex loops (only once per chunk): those block each other between
-	# the worker threads, so chunks would hardly build faster on several threads. Native ones (lerpf, sqrt, noise) are fine
-	# One extra ring of vertices around the chunk, only for the normals: the edge vertices need their neighbours
-	# on both sides, so neighbouring chunks get the same normals there and the edges don't show
+	# No GDScript function calls in the vertex loops, they block each other between threads (native ones are fine)
+	# Extra ring of vertices around the chunk, only for the normals, so the edges don't show
 	var ext_size: int = num_vertices + 2
 	var ext_count: int = ext_size * ext_size
 	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size, 1)
 	var moistures := sampler.sample_moisture_grid(uv_min, uv_max, grid_size)
-	var sphere_points := PackedVector3Array() # 32 bit is fine for directions, noise and normals
+	var sphere_points := PackedVector3Array()
 	sphere_points.resize(ext_count)
-	var ext_cache := PackedFloat64Array() # x, y, z of the sphere points, double precision
+	var ext_cache := PackedFloat64Array()
 	ext_cache.resize(ext_count * 3)
 
-	# Cube point and spherify on plain floats (64 bit), Vector3 (32 bit) is only ~3cm precise at 300km
-	# top-left to top-right and bottom-left to bottom-right per column (computed once), then vertical.
-	# The ring is just a bit outside 0..1
-	var top := PackedFloat64Array() # x, y, z per column
+	# Plain floats, Vector3 is only ~3cm precise at 300km
+	var top := PackedFloat64Array()
 	var bottom := PackedFloat64Array()
 	top.resize(ext_size * 3)
 	bottom.resize(ext_size * 3)
@@ -246,9 +246,9 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 
 	var surfaces := surface_heights(detail_noise, sphere_points, macro_ratios, height, detail_scale)
 
-	var ups := PackedVector3Array() # away from the planet at each vertex, the skirts hang straight down from the edges
+	var ups := PackedVector3Array()
 	ups.resize(total_vertices)
-	var positions := PackedVector3Array() # relative to the chunk center, ring included
+	var positions := PackedVector3Array() # ring included
 	positions.resize(ext_count)
 	for e in range(ext_count):
 		var r: float = radius + surfaces[e]
@@ -272,7 +272,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			ups[idx] = sphere_points[e].normalized()
 			heights[idx] = Vector2(macro_height_ratio, moistures[idx])
 
-			# Smooth normal of the terrain: from the neighbours left/right and above/below, pointing away from the planet
+			# Smooth normal from the neighbours
 			var normal := (positions[e + 1] - positions[e - 1]).cross(positions[e + ext_size] - positions[e - ext_size])
 			if normal.dot(sphere_points[e]) < 0.0:
 				normal = -normal
@@ -314,6 +314,32 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 			normals[curr_idx] = (normals[prev_idx] + normals[next_idx]).normalized()
 			heights[curr_idx] = heights[prev_idx].lerp(heights[next_idx], 0.5)
 
+	# Geomorphing: offset to the parent's surface (xyz) and height (w), the shader slides it to the real one.
+	# In between vertices take the average of their neighbours on the parent edge. Borders don't morph
+	var morph_offsets := PackedFloat32Array()
+	morph_offsets.resize(total_vertices_all * 4)
+	for y in range(1, grid_size if morph_from_parent else 1):
+		for x in range(1, grid_size):
+			if x % 2 == 0 and y % 2 == 0:
+				continue
+			var idx: int = x + y * num_vertices
+			var a: int
+			var b: int
+			if y % 2 == 0: # horizontal parent edge
+				a = idx - 1
+				b = idx + 1
+			elif x % 2 == 0: # vertical parent edge
+				a = idx - num_vertices
+				b = idx + num_vertices
+			else: # diagonal
+				a = idx + 1 - num_vertices
+				b = idx - 1 + num_vertices
+			var offset: Vector3 = (vertices[a] + vertices[b]) * 0.5 - vertices[idx]
+			morph_offsets[idx * 4] = offset.x
+			morph_offsets[idx * 4 + 1] = offset.y
+			morph_offsets[idx * 4 + 2] = offset.z
+			morph_offsets[idx * 4 + 3] = (heights[a].x + heights[b].x) * 0.5 - heights[idx].x
+
 	# Skirt, so that the occasional still existing hole (nbo idea why though), dissapears
 	var north_offset = total_vertices
 	var south_offset = north_offset + num_vertices
@@ -353,6 +379,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	mesh_array[Mesh.ARRAY_NORMAL] = normals
 	mesh_array[Mesh.ARRAY_TEX_UV2] = heights
 	mesh_array[Mesh.ARRAY_TEX_UV] = grid.terrain_uvs
+	mesh_array[Mesh.ARRAY_CUSTOM0] = morph_offsets
 
 	var water_data = calculate_water_mesh(grid, grid_size, radius, height, terrain_center, min_chunk_height, sphere_points_cache, heights)
 
@@ -362,10 +389,7 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 		"surface_range": Vector2(min_surface, max_surface)
 	}
 
-# Sea level is height 0, so the water is just a sphere at the planet radius
-# Meters above the planet radius at each point, from the tile height plus detail noise.
-# Also used by Planet.ground_height_at, so the ground check matches the mesh
-# For many points at once, the loop has no GDScript function calls (see calculate_terrain_mesh)
+# Tile height + detail noise, in meters above the radius
 static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVector3Array, macro_height_ratios: PackedFloat32Array, height: float, detail_scale: float) -> PackedFloat32Array:
 	var result := PackedFloat32Array()
 	result.resize(sphere_points.size())
@@ -374,7 +398,7 @@ static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVe
 		var sphere_point := sphere_points[i]
 		var macro_height_ratio := macro_height_ratios[i]
 		var macro_height := macro_height_ratio * height
-		if macro_height_ratio <= 0.0: # no detail below sea level (land is 0 there), so the noise isn't needed
+		if macro_height_ratio <= 0.0:
 			result[i] = macro_height
 			continue
 
@@ -391,8 +415,7 @@ static func surface_heights(detail_noise: FastNoiseLite, sphere_points: PackedVe
 		result[i] = macro_height + detail * detail_strength * land * detail_height_scale
 	return result
 
-# terrain_heights: the terrain's UV2 (height / max_height), the water gets the depth of the ground under it in meters
-# (UV2.x), the water shader uses it for how much water the view goes through
+# The water gets the depth of the ground under it (UV2.x)
 static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float, height: float, terrain_center: PackedFloat64Array, min_terrain_height: float, sphere_points_cache: PackedFloat64Array, terrain_heights: PackedVector2Array) -> Dictionary:
 	if min_terrain_height > 0.1:
 		return { "should_render": false }
@@ -421,7 +444,7 @@ static func calculate_water_mesh(grid: ChunkGrid, grid_size: int, radius: float,
 
 			vertices[idx] = Vector3(sx * radius - terrain_center[0], sy * radius - terrain_center[1], sz * radius - terrain_center[2])
 			normals[idx] = Vector3(sx, sy, sz)
-			depths[idx] = Vector2(maxf(0.0, -terrain_heights[idx].x * height), 0.0) # below sea level there is no detail noise
+			depths[idx] = Vector2(maxf(0.0, -terrain_heights[idx].x * height), 0.0)
 
 	mesh_array[Mesh.ARRAY_VERTEX] = vertices
 	mesh_array[Mesh.ARRAY_INDEX] = grid.water_indices

@@ -1,9 +1,8 @@
 class_name CubeSphere
 extends RefCounted
 
-## Mapping between the cube (6 faces, uv 0..1 per face) and the unit sphere.
-## Every face/tile/chunk lookup goes through here, so the quadtree, terrain data and tiles all agree.
-## Face corners are [top_left, top_right, bottom_right, bottom_left], u goes left -> right, v goes top -> bottom.
+## Cube (6 faces, uv 0..1) <-> unit sphere
+## Face corners: [top_left, top_right, bottom_right, bottom_left]
 
 const FACES: Array = [
 	[Vector3(-1, 1, 1), Vector3( 1, 1, 1), Vector3( 1,-1, 1), Vector3(-1,-1, 1)], # 0 Front (+Z)
@@ -25,8 +24,7 @@ static func spherify(p: Vector3) -> Vector3:
 	res.z = p.z * sqrt(1.0 - x2 / 2.0 - y2 / 2.0 + x2 * y2 / 3.0)
 	return res
 
-# One component of spherify on plain floats, which are 64 bit in GDScript (Vector3 is only 32 bit)
-# a is the component itself, b2 and c2 are the squares of the other two
+# Plain floats are 64 bit, Vector3 only 32. b2, c2: squares of the other two
 static func spherify_axis(a: float, b2: float, c2: float) -> float:
 	return a * sqrt(1.0 - b2 / 2.0 - c2 / 2.0 + b2 * c2 / 3.0)
 
@@ -68,11 +66,11 @@ static func get_face_uv(dir: Vector3, face: int) -> Vector2:
 static func cube_to_face_uv(face: int, p: Vector3) -> Vector2:
 	var c: Array = FACES[face]
 	var to_p: Vector3 = p - c[0]
-	var u: float = to_p.dot(c[1] - c[0]) / 4.0 # edges are 2 long, so squared length is 4
+	var u: float = to_p.dot(c[1] - c[0]) / 4.0 # edges are 2 long
 	var v: float = to_p.dot(c[3] - c[0]) / 4.0
 	return Vector2(u, v)
 
-# Closed form inverse of spherify for the two free coordinates of a face
+# Inverse of spherify
 static func unspherify_pair(a: float, b: float) -> Vector2:
 	var a2 := a * a * 2.0
 	var b2 := b * b * 2.0

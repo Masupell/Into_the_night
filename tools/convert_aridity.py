@@ -1,15 +1,10 @@
-"""Converts the Global Aridity Index (Zomer & Trabucco, v3.1, CC BY 4.0) into a moisture map the tiles are baked from.
+"""Converts the Global Aridity Index (Zomer & Trabucco, v3.1, CC BY 4.0) into a moisture map.
 
-Aridity index = yearly rain / yearly potential evaporation: below 0.03 hyper-arid (Sahara), 0.03-0.2 arid,
-0.2-0.5 semi-arid, 0.5-0.65 dry sub-humid, above that humid (rainforest ~2).
-It is turned into the game's moisture (0 desert .. 1 rainforest, 0.5 plain grass), see AI_TO_MOISTURE,
-the shader's moisture bands (planet.gdshader) are tuned for that.
+Aridity index = yearly rain / potential evaporation, turned into 0 desert .. 1 rainforest (see AI_TO_MOISTURE).
+Sea and everything below 60S are filled from the land around them.
 
-The source only has land and stops at 60S (no Antarctica): those pixels (0) are filled from the land around them,
-so the coasts blend smoothly (the shader only uses moisture on land anyway).
-
-Output (next to each other):
-  <out>.bin   uint8, moisture * 255, row major, row 0 = 90N, column 0 = 180W, pixel centers (same layout as ETOPO)
+Output:
+  <out>.bin   uint8, moisture * 255, same layout as ETOPO
   <out>.json  width, height, format and where the data came from
 
 Usage (from the project root):
@@ -39,7 +34,7 @@ FULL_HEIGHT_ROWS_PER_DEGREE = 120  # 30 arc seconds
 
 
 def upsample2(a):
-    """Twice the size in both directions, bilinear (each new pixel is 3/4 its own coarse pixel, 1/4 the neighbour)"""
+    """Twice the size, bilinear"""
     for axis in (0, 1):
         p = np.pad(a, [(1, 1) if i == axis else (0, 0) for i in range(2)], mode="edge")
         mid = np.take(p, range(1, p.shape[axis] - 1), axis=axis)
@@ -56,12 +51,11 @@ def upsample2(a):
 
 
 def fill_gaps(values, valid):
-    """Push-pull: averages the valid pixels into coarser and coarser levels until everything is covered,
-    then fills each gap from the level above (smooth, every gap gets the land around it)."""
+    """Push-pull fill of the invalid pixels"""
     if valid.all():
         return values
     h, w = values.shape
-    ph, pw = h + h % 2, w + w % 2  # odd sizes: repeat the last row / column
+    ph, pw = h + h % 2, w + w % 2
     v = np.pad(values * valid, ((0, ph - h), (0, pw - w)), mode="edge")
     m = np.pad(valid.astype(np.float32), ((0, ph - h), (0, pw - w)), mode="edge")
     weight = m.reshape(ph // 2, 2, pw // 2, 2).sum(axis=(1, 3))
@@ -82,16 +76,16 @@ def main():
 
     raw = tifffile.imread(args.input)
     print(f"read {args.input.name}: {raw.shape[1]} x {raw.shape[0]}")
-    # The file stops at 60S: add the missing rows down to 90S, all no data
+    # The file stops at 60S
     full_rows = 180 * FULL_HEIGHT_ROWS_PER_DEGREE
     assert raw.shape[1] == 360 * FULL_HEIGHT_ROWS_PER_DEGREE and raw.shape[0] <= full_rows
     valid = np.zeros((full_rows, raw.shape[1]), dtype=bool)
-    valid[:raw.shape[0]] = raw > 0  # 0 = sea / no data, 65535 = very wet (saturated), kept as 6.55
+    valid[:raw.shape[0]] = raw > 0  # 0 = sea / no data
     ai = np.zeros(valid.shape, dtype=np.float32)
     ai[:raw.shape[0]] = raw / 10000.0
     del raw
 
-    if args.downsample > 1:  # average of the valid pixels only, so coasts don't get dragged towards 0
+    if args.downsample > 1:  # only valid pixels, so coasts don't go towards 0
         f = args.downsample
         h, w = ai.shape[0] // f, ai.shape[1] // f
         weight = valid[:h * f, :w * f].reshape(h, f, w, f).sum(axis=(1, 3))

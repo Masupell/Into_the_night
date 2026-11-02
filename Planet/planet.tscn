@@ -7,22 +7,9 @@ frequency = 0.0141
 fractal_lacunarity = 2.305
 fractal_gain = 0.58
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_b00i1"]
-emission_enabled = true
-emission = Color(1, 1, 0, 1)
-emission_energy_multiplier = 16.0
-
-[sub_resource type="SphereMesh" id="SphereMesh_b00i1"]
-material = SubResource("StandardMaterial3D_b00i1")
-radius = 100.0
-height = 200.0
-
 [node name="Planet" type="Node3D" unique_id=262084446 node_paths=PackedStringArray("command_processor")]
 script = ExtResource("1_06kw6")
 terrain_noise = SubResource("FastNoiseLite_m2dqj")
 command_processor = NodePath("")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=142772881]
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="DirectionalLight3D" unique_id=1036774319]
-mesh = SubResource("SphereMesh_b00i1")

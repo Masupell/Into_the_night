@@ -30,7 +30,7 @@ func parse(token: String) -> bool:
 			if token.is_valid_int() or token.is_valid_float() or ":" in token:
 				return true
 			return matches_suggestions(token)
-		Type.COORD: # a number, "~" (the current value) or "~number" (relative to it), resolved by CommandContext.get_coordinate
+		Type.COORD: # a number, "~" or "~number" (relative)
 			if token.begins_with("~"):
 				return token.length() == 1 or token.substr(1).is_valid_float()
 			return token.is_valid_float()

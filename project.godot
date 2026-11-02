@@ -67,6 +67,14 @@ show_lod={
 "type": "bool",
 "value": false
 }
+terrain_time={
+"type": "float",
+"value": 0.0
+}
+star_visibility={
+"type": "float",
+"value": 1.0
+}
 
 [threading]
 

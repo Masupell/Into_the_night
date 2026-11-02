@@ -5,9 +5,9 @@ var planet: Planet
 var level: int = 0 # Depth of quadtree
 var corners: Array
 var face: int # cube face, same for the whole tree
-var uv_min: Vector2 # uv rectangle on the face, top left / bottom right corner
+var uv_min: Vector2 # uv rect on the face
 var uv_max: Vector2
-var center: PackedFloat64Array # x, y, z of the surface center in planet space, double precision, origin of the chunk mesh
+var center: PackedFloat64Array # x, y, z in doubles, origin of the chunk mesh
 var children: Array[Quad] = []
 var chunk: Chunk = null
 
@@ -16,9 +16,9 @@ const FRUSTUM_INTERSECT = 1
 const FRUSTUM_INSIDE = 2
 
 var frustum_state = FRUSTUM_INTERSECT
-var bounding_aabb: AABB # sea level up to max_height, for culling while the camera is above water
-var bounding_aabb_deep: AABB # also down to the ocean floor, for culling under water
-# Both boxes as center + half size, and the frustum margin, precomputed for test_frustum
+var bounding_aabb: AABB # sea level up to max_height
+var bounding_aabb_deep: AABB # down to the ocean floor, for under water
+# For test_frustum
 var aabb_center: Vector3
 var aabb_extents: Vector3
 var aabb_margin: float
@@ -26,10 +26,9 @@ var aabb_deep_center: Vector3
 var aabb_deep_extents: Vector3
 var aabb_deep_margin: float
 var bounding_center: Vector3
-var surface_dir: Vector3 # unit direction of the quad center, for the LOD distance
-var half_diagonal: float # center to corner on the surface, meters
-# Visible surface heights in meters above the radius (ground, or the water at 0), for the LOD distance.
-# From the last own chunk mesh, until then inherited from the parent (whole possible range at the roots)
+var surface_dir: Vector3
+var half_diagonal: float
+# Visible height range, from the parent until the own chunk is built
 var surface_min: float
 var surface_max: float
 var horizon_cos_alpha: float
@@ -54,14 +53,13 @@ func _init(_planet: Planet, _level: int, _corners: Array, _parent: Quad = null, 
 	if _parent:
 		surface_min = _parent.surface_min
 		surface_max = _parent.surface_max
-		currently_visible = _parent.currently_visible # a neighbour can split this one while it's out of view, then it isn't visited
+		currently_visible = _parent.currently_visible
 	else:
 		surface_min = planet.min_terrain_radius - planet.radius
 		surface_max = planet.max_height
 	calculate_bounds()
 
-# Returns true when what this quad shows is ready: its own chunk, or (when split) all visible children are ready.
-# ancestor_has_chunk: some quad above still has a chunk, then this one's chunk stays hidden until that one is gone
+# True when its chunk, or all visible children are ready
 func update_lod(camera_pos: Vector3, frustum_planes: Array, ancestor_has_chunk: bool = false) -> bool:
 	if parent_quad and parent_quad.frustum_state == FRUSTUM_INSIDE:
 		frustum_state = FRUSTUM_INSIDE
@@ -74,8 +72,7 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array, ancestor_has_chunk: 
 	var was_visible := currently_visible
 	currently_visible = is_above_horizon(camera_pos) and frustum_state != FRUSTUM_OUTSIDE
 	if not currently_visible:
-		# Everything below is out of view as well. Cleaned up once when this quad goes out of view,
-		# after that the subtree isn't visited at all until this quad is visible again
+		# Everything below is out of view too
 		if was_visible:
 			hide_subtree()
 		return true
@@ -103,28 +100,28 @@ func update_lod(camera_pos: Vector3, frustum_planes: Array, ancestor_has_chunk: 
 		elif not chunk.visible and not ancestor_has_chunk:
 			chunk.visible = true
 		return true
-	# Waiting to merge, the old children are still what is shown
+	# Waiting to merge, the children are still shown
 	if not children.is_empty():
 		return are_children_ready()
 	return false
 
-# Out of view: no chunks anywhere below, all marked hidden (the parent doesn't wait for hidden quads)
+# No chunks anywhere below
 func hide_subtree():
 	currently_visible = false
 	remove_chunk()
 	for child in children:
 		child.hide_subtree()
 
-# Distance to the nearest point of the quad centers height range (the position's height clamped into it)
+# Distance to the quad centers height range
 func center_distance(pos: Vector3) -> float:
 	var height := pos.dot(surface_dir) - planet.radius
 	return pos.distance_to(surface_dir * (planet.radius + clampf(height, surface_min, surface_max)))
 
-# Roughly the distance to the nearest point of the surface: center distance minus half the quad's width (0 when above it)
+# Roughly the distance to the surface, 0 when above it
 func surface_distance(pos: Vector3) -> float:
 	return maxf(0.0, center_distance(pos) - half_diagonal)
 
-# min/max of the chunks mesh heights (x, y). Where the ground is under water, the water surface at 0 is visible too
+# Under water the water surface at 0 counts too
 func set_surface_range(height_range: Vector2):
 	surface_min = height_range.x
 	surface_max = maxf(height_range.y, 0.0) if height_range.x < 0.0 else height_range.y
@@ -142,8 +139,7 @@ func are_children_ready() -> bool:
 			return false
 	return true
 
-# Frustum planes point outwards (distance > 0 is outside). Box as center + half size:
-# the corner furthest inside is distance - r, the one furthest outside distance + r, with r = extents projected on the normal
+# Frustum planes point outwards
 func test_frustum(frustum_planes: Array, under_water: bool) -> int:
 	var center_box := aabb_deep_center if under_water else aabb_center
 	var extents := aabb_deep_extents if under_water else aabb_extents
@@ -164,8 +160,7 @@ func test_frustum(frustum_planes: Array, under_water: bool) -> int:
 
 func is_above_horizon(camera_pos: Vector3) -> bool:
 	var camera_distance: float = camera_pos.length()
-	# Above water the (opaque when deep) sea surface hides everything below the horizon,
-	# under water only the lowest ground (ocean floor) can
+	# Under water only the ocean floor hides things
 	@warning_ignore("incompatible_ternary")
 	var occluder_radius: float = planet.radius if camera_distance > planet.radius else planet.min_terrain_radius
 	if camera_distance <= occluder_radius:
@@ -278,15 +273,14 @@ func merge():
 	children.clear()
 	refresh_neighbors()
 
-# Moving away fast can merge a quad whose children are still split, so the whole subtree has to go,
-# otherwise the deeper chunks are never recycled and stay visible forever
+# The whole subtree, otherwise deeper chunks stay forever
 func remove_subtree():
 	remove_chunk()
 	for child in children:
 		child.remove_subtree()
 	children.clear()
 
-# Quitting: parent and children reference each other, so the tree would never be freed by itself (leaks at exit)
+# Parent and children reference each other, leaks otherwise
 func release_tree():
 	for child in children:
 		child.release_tree()
@@ -308,7 +302,7 @@ func draw_chunk():
 	if chunk == null:
 		chunk = planet.request_chunk()
 		chunk.visible = false
-		chunk.planet = planet # before the tile check, a waiting chunk can get recycled too
+		chunk.planet = planet
 
 	if chunk.active_task_id != -1:
 		chunk.redraw_requested = true
@@ -320,7 +314,7 @@ func draw_chunk():
 	var current_grid_size = planet.grid_size_for_level(level)
 
 	var sampler := planet.terrain_data.get_sampler(face, level, current_grid_size, (uv_min + uv_max) * 0.5)
-	if sampler == null: # tile is loading, chunk retries next frame and keeps its old mesh until then
+	if sampler == null: # tile is loading, try next frame
 		chunk.waiting_for_tiles = true
 		return
 
@@ -331,27 +325,30 @@ func draw_chunk():
 	var e_nb = get_neighbor_east()
 	var w_nb = get_neighbor_west()
 
-	# Stitch only where the neighbour's vertices are really further apart (twice), a lower level alone isn't enough:
-	# with more grid cells it can have the same spacing, then the edges already match and stitching would open gaps
+	# Only stitch where the neighbour's spacing is really twice
 	var spacing := planet.vertex_spacing_for_level(level) * 1.5
 	var stitch_n = n_nb != null and planet.vertex_spacing_for_level(n_nb.level) > spacing
 	var stitch_s = s_nb != null and planet.vertex_spacing_for_level(s_nb.level) > spacing
 	var stitch_e = e_nb != null and planet.vertex_spacing_for_level(e_nb.level) > spacing
 	var stitch_w = w_nb != null and planet.vertex_spacing_for_level(w_nb.level) > spacing
+	# Only morph if the parent was coarser
+	var morph_from_parent = parent_quad != null and planet.vertex_spacing_for_level(level - 1) > spacing
 
 	#if level > highest_lod:
 		#highest_lod = level
 		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, " ", chunk_world_size)
 
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, planet.max_height * 0.05))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, planet.max_height * 0.05, morph_from_parent))
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 
+# Children start in the parent's shape and morph to their own
 func reveal_leaves():
 	if children.is_empty():
-		if chunk:
+		if chunk and not chunk.visible:
 			chunk.visible = true
+			chunk.start_morph()
 	else:
 		for child in children:
 			child.reveal_leaves()
@@ -400,12 +397,12 @@ func calculate_bounds():
 		max_v = max_v.max(surface).max(mountains)
 		deep_min = deep_min.min(min_v).min(ocean_floor)
 		deep_max = deep_max.max(max_v).max(ocean_floor)
-	bounding_aabb = (AABB(min_v, max_v - min_v)).grow(5.0) # grow, to give a bit of a buffer around the screen edges
+	bounding_aabb = (AABB(min_v, max_v - min_v)).grow(5.0) # bit of buffer around the screen edges
 	bounding_aabb_deep = (AABB(deep_min, deep_max - deep_min)).grow(5.0)
 
 	aabb_center = bounding_aabb.get_center()
 	aabb_extents = bounding_aabb.size * 0.5
-	aabb_margin = bounding_aabb.size.length() * 0.15 # a bit outside still counts as inside
+	aabb_margin = bounding_aabb.size.length() * 0.15
 	aabb_deep_center = bounding_aabb_deep.get_center()
 	aabb_deep_extents = bounding_aabb_deep.size * 0.5
 	aabb_deep_margin = bounding_aabb_deep.size.length() * 0.15

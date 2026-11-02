@@ -1,24 +1,16 @@
-"""Bakes the terrain tile pyramid from a converted equirect file into one pack file,
-so the game only reads the tiles it needs instead of keeping the whole map in memory.
-Heights (convert_etopo.py, int16 meters) or moisture (convert_aridity.py, uint8), the format is kept.
+"""Bakes the tile pyramid from a converted equirect file (heights or moisture) into one pack file.
 
-Must match the game code:
-  - CubeSphere.FACES / face_to_sphere (cube face uv -> sphere direction)
-  - TerrainTile.pixel_to_dir (tile pixel -> face uv, tiles share their border pixels)
-  - EquirectSource.get_uv / sample (direction -> equirect uv, bilinear on pixel centers, wraps horizontally)
-
-Only the finest level is sampled from the source. Every coarser level takes every second pixel of the level below,
-which is exactly what the game did before (coarse pixels are also fine pixels), so chunks of different levels still meet.
+Must match CubeSphere.FACES / face_to_sphere, TerrainTile.pixel_to_dir and EquirectSource.get_uv / sample.
 
 Output:
-  <out>.bin   all tiles, same format as the input (int16 little endian meters / uint8 moisture), row major (x + y * tile_size).
+  <out>.bin   all tiles, same format as the input, row major.
               Level L starts at levels[L].offset, tile (face, x, y) is at index (face * n + y) * n + x with n = 2^L
   <out>.json  tile_size, max_level, level offsets, ...
 
 Usage (from the project root):
   tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
   tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
-  (moisture: --tile-size has to be TerrainTile.MOISTURE_SIZE, --max-level the same as the heights)
+  (moisture: --tile-size = TerrainTile.MOISTURE_SIZE, --max-level same as the heights)
 """
 
 import argparse
@@ -28,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-# format -> numpy type of a pixel, same in and out
+# format -> numpy type
 FORMATS = {
     "int16_le_meters": np.dtype("<i2"),
     "uint8_moisture": np.dtype("u1"),
@@ -100,7 +92,7 @@ def main():
         offset += 6 * (1 << level) ** 2 * tile_bytes
     total_bytes = offset
 
-    face_pixels = (1 << args.max_level) * step  # last pixel index of a face at the finest level
+    face_pixels = (1 << args.max_level) * step  # last pixel of a face at the finest level
     out = np.memmap(args.output.with_suffix(".bin"), dtype=dtype, mode="w+", shape=(total_bytes // dtype.itemsize,))
 
     start = time.time()

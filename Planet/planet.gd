@@ -3,12 +3,12 @@ extends Node3D
 
 @export var planet_seed: int = 0
 
-@export var radius: float = 318550.0 # 1/20 of the Earth (was 63710, 1/100)
+@export var radius: float = 318550.0 # 1/20 of the Earth
 @export var start_altitude: float = 350000.0
-@export var max_depth_ratio: float = 1.25 # deepest ocean floor below sea level, times max_height (ETOPO: 10752 / 8849 = 1.22)
-@export var max_height: float = 1106.0 # Everest, 2.5x the real height for 1/20 of the Earth, mountains would feel too small otherwise
-@export var atmosphere_height: float = 10000.0 # 2x the Earth's in proportion, so it keeps some distance to the (higher) mountains
-var atmosphere_radius: float # set in _ready from radius + atmosphere_height
+@export var max_depth_ratio: float = 1.25 # deepest ocean floor, times max_height (ETOPO: 10752 / 8849)
+@export var max_height: float = 1106.0 # Everest, 2.5x scaled up, mountains feel too small otherwise
+@export var atmosphere_height: float = 10000.0 # 2x the Earth's, so it stays above the mountains
+var atmosphere_radius: float
 
 @export_group("Terrain Settings")
 @export var terrain_noise: FastNoiseLite
@@ -18,14 +18,23 @@ var detail_noise := FastNoiseLite.new()
 @export_group("", "")
 @export var max_lod_level := 16 #Only really ever get to 9, so 16, is a bit unnecessary
 @export var grid_size: int = 16
-@export var collision_radius: float = 300.0 # chunks this close to the player get a collider, lose it again at 1.5x
-@export var collider_budget_ms: float = 2.0 # time per frame for making colliders, nearest first, the rest waits for the next frames
-@export var collider_always_distance: float = 50.0 # closer than this a collider is made right away, even over the budget
-@export var min_vertex_spacing: float = 1.0 # meters, chunks don't split further than this, the data has no finer detail anyway
-var lod_level_limit: int # max_lod_level, or lower if vertices would get closer than min_vertex_spacing
-@export var terrain_max_tile_level: int = 6 # 2^6 * 128 + 1 = 8193 pixels per face edge, ETOPO 60s has 5400 per face (90 degrees). Baked tiles bring their own
-@export var terrain_tile_size: int = 129 # Pixels per tile edge
-@export var earth_meters_per_unit: float = 8849.0 # Real meters that become max_height, Everest = max_height
+@export var collision_radius: float = 300.0 # removed again at 1.5x
+@export var collider_budget_ms: float = 2.0 # per frame, nearest first
+@export var collider_always_distance: float = 50.0 # closer than this ignores the budget
+# Far away chunks get 4x / 2x the grid cells, so distant mountains keep their shape
+@export var dense_grid_distance: float = 7500.0:
+	set(value):
+		dense_grid_distance = value
+		_grid_distances_changed()
+@export var medium_grid_distance: float = 3000.0:
+	set(value):
+		medium_grid_distance = value
+		_grid_distances_changed()
+@export var min_vertex_spacing: float = 1.0 # meters, no finer detail in the data anyway
+var lod_level_limit: int
+@export var terrain_max_tile_level: int = 6 # baked tiles bring their own
+@export var terrain_tile_size: int = 129
+@export var earth_meters_per_unit: float = 8849.0 # real meters that become max_height (Everest)
 
 @onready var chunk_container: Node3D = Node3D.new()
 var free_chunks: Array[Chunk] = []
@@ -34,12 +43,13 @@ var root_quads: Array[Quad] = []
 
 @export_range(10.0, 40.0) var lod_threshold_deg: float = 20.0
 var split_distances: Array[float] = []
+var terrain_time: float = 0.0 # for the chunk morphing
 
-@onready var camera = get_viewport().get_camera_3d() # main camera: LOD and frustum culling, the debug camera only looks
-var camera_mode = 2 # what the player looks through: 1 plane, 2 free cam, 3 debug camera
-var main_mode = 2 # 1 plane, 2 free cam: sits at the world origin (true position), LOD and colliders follow it. Stays during debug
-@export var near_per_clearance: float = 0.002 # near plane grows with the distance above the highest mountains (free cam only)
-var base_near: Dictionary = {} # Camera3D -> near set in the scene, the near plane never gets smaller than that
+@onready var camera = get_viewport().get_camera_3d() # main camera, for LOD and culling
+var camera_mode = 2 # 1 plane, 2 free cam, 3 debug camera
+var main_mode = 2 # 1 plane, 2 free cam, stays during debug
+@export var near_per_clearance: float = 0.002
+var base_near: Dictionary = {} # Camera3D -> near from the scene
 
 #var world_image: Image
 var terrain_data: TerrainData
@@ -51,10 +61,20 @@ var atmosphere: MeshInstance3D
 @export var real_seconds_per_game_minute: float = 1.0
 var time_speed_multiplier: float = 1.0
 var orbit_speed: float = 0.0
-@export var orbit_distance_factor: float = 1.4 # debug sun sphere distance, times radius
+@export var orbit_distance_factor: float = 1.4 # only the direction matters
 var orbit_distance: float
 
 var sun_orbit_angle: float = 0.0
+
+@export_group("Stars")
+@export var twilight_band: Vector2 = Vector2(-0.12, 0.05) # sun height: all stars below x, none above y
+@export var lit_ground_strength: float = 3.0
+@export var sun_glare_margin: float = 0.5 # times screen height
+@export var star_dim_speed: float = 4.0
+@export var star_recover_speed: float = 0.7
+@export_group("", "")
+var star_visibility: float = 1.0
+const STAR_SAMPLE_GRID := 5
 
 var terrain_material: ShaderMaterial
 var water_material: ShaderMaterial
@@ -63,15 +83,15 @@ var water_material: ShaderMaterial
 
 var world_commands: WorldCommands
 
-var min_terrain_radius: float # lowest possible ground (ocean floor), set in _ready
-var edge_length: float # set in _ready, an initializer here would still use the default radius, not the one from the scene
+var min_terrain_radius: float # ocean floor
+var edge_length: float
 
 @export var plane: AirPlane
 @export var free_cam: FreeCam
 @export var flight_hud: FligthHUD
 @export var canvas_layer: CanvasLayer
 
-# True position of the controller that owns the current camera, relative to the planets center
+# True position of the current controller, relative to the planets center
 var true_x: float = 0.0
 var true_y: float = 0.0
 var true_z: float = 0.0
@@ -141,7 +161,7 @@ func _ready() -> void:
 		terrain_noise.seed = randi()
 
 	chunk_container.name = "ChunkPool"
-	chunk_container.top_level = true # stays at the world origin, chunks position themselves (see update_chunk_positions)
+	chunk_container.top_level = true
 	add_child(chunk_container)
 
 	compute_lod_thresholds()
@@ -154,6 +174,8 @@ func _ready() -> void:
 	world_commands = WorldCommands.new(command_processor, self)
 
 func _process(delta: float) -> void:
+	terrain_time += delta
+	RenderingServer.global_shader_parameter_set("terrain_time", terrain_time)
 	terrain_data.update()
 	for chunk: Chunk in chunk_container.get_children():
 		chunk.poll_task()
@@ -166,7 +188,7 @@ func _process(delta: float) -> void:
 	var cam_pos = get_true_position()
 	update_camera_planes(camera)
 	var view_camera := get_viewport().get_camera_3d()
-	if view_camera and view_camera != camera: # debug camera
+	if view_camera and view_camera != camera:
 		update_camera_planes(view_camera)
 	var frustum_planes = []
 	for p in camera.get_frustum():
@@ -184,8 +206,9 @@ func _process(delta: float) -> void:
 		mat.set_shader_parameter("sun_dir", sun_dir)
 	terrain_material.set_shader_parameter("sun_dir", sun_dir)
 	terrain_material.set_shader_parameter("planet_center", global_position)
+	update_star_visibility(sun_dir, delta)
 
-# Quitting: tasks still running would write into chunks and tiles that are being freed, wait for all of them first
+# Wait for running tasks, otherwise they write into freed chunks
 func _exit_tree() -> void:
 	for chunk: Chunk in chunk_container.get_children():
 		if chunk.active_task_id != -1:
@@ -207,28 +230,30 @@ func compute_lod_thresholds():
 		var safety_floor = level_diagonal * 2.2
 		split_distances[level] = maxf(dist, safety_floor)
 
+	# Less than 2x and the stitching breaks
+	if dense_grid_distance < medium_grid_distance * 2.0:
+		push_warning("dense_grid_distance should be at least 2x medium_grid_distance, chunk edges may not match")
+
 	lod_level_limit = 0
 	while lod_level_limit < max_lod_level and edge_size / float(1 << (lod_level_limit + 1)) / grid_size_for_level(lod_level_limit + 1) >= min_vertex_spacing:
 		lod_level_limit += 1
 
-# Far plane: nothing is visible past the horizon, except things sticking up behind it, the highest being the atmosphere.
-# So far = distance to the horizon + how far behind the horizon the top of the atmosphere still shows.
-# Near plane: grows with the distance to the highest possible ground, so near / far stays small high up.
-# Not in plane mode, the plane itself is right in front of the camera there
+# Far: horizon + how far the atmosphere still shows behind it
+# Near: grows with the height (not for the plane camera)
 func update_camera_planes(cam: Camera3D):
 	if not base_near.has(cam):
 		base_near[cam] = cam.near
-	var pos: Vector3 = get_true_position() + cam.global_position # plane camera is behind the plane, debug camera elsewhere
+	var pos: Vector3 = get_true_position() + cam.global_position
 	var dist := pos.length()
 
-	# above water the sea surface blocks the view, under water only the ocean floor does
+	# under water only the ocean floor blocks the view
 	@warning_ignore("incompatible_ternary")
 	var occluder: float = radius if dist > radius else min_terrain_radius
 	var top := maxf(atmosphere_radius, radius + max_height)
 	var to_horizon := sqrt(maxf(0.0, dist * dist - occluder * occluder))
 	var behind_horizon := sqrt(top * top - occluder * occluder)
 	cam.far = (to_horizon + behind_horizon) * 1.05
-	if cam == get_viewport().get_camera_3d(): # the one that renders
+	if cam == get_viewport().get_camera_3d():
 		(atmosphere.material_override as ShaderMaterial).set_shader_parameter("max_draw_distance", cam.far * 0.9)
 
 	var near: float = base_near[cam]
@@ -237,12 +262,7 @@ func update_camera_planes(cam: Camera3D):
 		near = maxf(near, clearance * near_per_clearance)
 	cam.near = near
 
-# Colliders for the shown chunks near the player. Distance to the chunk's real height range (ocean floor up to the water
-# surface under water), not its bounding box: that reaches from the ocean floor to the highest mountain and on a slope
-# of the planet is hundreds of meters wide, then everything nearby counted as distance 0.
-# Made nearest first within collider_budget_ms per frame, so arriving fast at the ground doesn't make them all in one frame.
-# Only shown chunks: hidden ones (finished children waiting for their siblings, coarse ones about to be replaced)
-# would contain the player just as much and use up the budget
+# Colliders for visible chunks near the player, nearest first, within the budget
 func update_colliders():
 	var player := get_true_position()
 	var wanted := [] # [center distance, surface distance, chunk]
@@ -252,10 +272,9 @@ func update_colliders():
 		var distance := chunk.owner_quad.surface_distance(player)
 		if chunk.collider == null or chunk.collider_outdated:
 			if distance < collision_radius and chunk.visible:
-				# ordered by the center: the surface distance is 0 for every chunk the player is above or next to,
-				# the one right under the player has the closest center
+				# sorted by center, the surface distance is 0 for all chunks around
 				wanted.append([chunk.owner_quad.center_distance(player), distance, chunk])
-		elif distance > collision_radius * 1.5: # a bit further than added, so they don't flicker on and off at the edge
+		elif distance > collision_radius * 1.5:
 			chunk.remove_collider()
 
 	wanted.sort_custom(func(a, b): return a[0] < b[0])
@@ -266,18 +285,22 @@ func update_colliders():
 			continue
 		entry[2].build_collider()
 
-# Vertices per chunk edge, bigger chunks get more so the curvature stays smooth
+# Grid cells per chunk edge, more for far away chunks
 func grid_size_for_level(level: int) -> int:
-	var level_edge = edge_length / float(1 << level) # 2^level by bitshifting
-	if level_edge > 2500.0: # 2.5km across
+	if split_distances[level] >= dense_grid_distance:
 		return grid_size * 4
-	elif level_edge > 1000.0: # 1km across
+	elif split_distances[level] >= medium_grid_distance:
 		return grid_size * 2
 	return grid_size
 
-# Distance between two vertices along a chunk edge of this level (on the cube, relative between levels is what matters).
-# Not just halving per level: grid_size_for_level gives bigger chunks more vertices, so where it changes,
-# two levels have the same spacing
+func _grid_distances_changed():
+	if not is_node_ready():
+		return
+	compute_lod_thresholds()
+	for q in root_quads:
+		q.force_rebuild_leaves()
+
+# On the cube, only relative between levels
 func vertex_spacing_for_level(level: int) -> float:
 	return edge_length / float(1 << level) / grid_size_for_level(level)
 
@@ -312,14 +335,12 @@ func shift_origin(moved_by: Vector3):
 	global_position = -get_true_position()
 	update_chunk_positions()
 
-	# Everything else in world space has to move back by the same, so it stays at its place on the planet
 	if main_mode != 1 and plane:
 		plane.global_position -= moved_by
 	if camera_mode == 3:
 		free_cam.debug_camera.global_position -= moved_by
 
-# Same as ground_height_at, but from the finest tile, which gets loaded if needed: NAN until it is.
-# Works anywhere on the planet without chunks (the plane while it isn't controlled)
+# Like ground_height_at, but loads the finest tile, NAN until then
 func ground_height_loading(dir: Vector3) -> float:
 	var face := CubeSphere.get_face(dir)
 	var h = terrain_data.sample_finest(face, CubeSphere.get_face_uv(dir, face))
@@ -327,8 +348,7 @@ func ground_height_loading(dir: Vector3) -> float:
 		return NAN
 	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
 
-# Meters above the radius of the ground under dir, from the finest loaded tile (without loading anything)
-# Ocean floor depth if nothing is loaded there yet, so it is never above the real ground
+# From the finest loaded tile, ocean floor if nothing is loaded yet
 func ground_height_at(dir: Vector3) -> float:
 	var face := CubeSphere.get_face(dir)
 	var h := terrain_data.sample_loaded(face, CubeSphere.get_face_uv(dir, face))
@@ -336,12 +356,11 @@ func ground_height_at(dir: Vector3) -> float:
 		return min_terrain_radius - radius
 	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
 
-# If the active controller (free cam / plane) ended up below the ground (too fast for its collision, or no collider yet),
-# push it back out along the up direction, clearance meters above the ground. Returns true if it had to
+# Pushes the controller back up if it fell through the ground
 func keep_above_ground(clearance: float) -> bool:
 	var pos := get_true_position()
 	var dist := pos.length()
-	var dir := pos / dist if dist > 1.0 else Vector3.UP # at the very center there is no up, pick any
+	var dir := pos / dist if dist > 1.0 else Vector3.UP
 	var ground := radius + ground_height_at(dir)
 	if dist >= ground:
 		return false
@@ -356,21 +375,20 @@ func seed_origin_from(world_pos: Vector3):
 	global_position = -get_true_position()
 	update_chunk_positions()
 
-# Chunks are not moved by the planet node (float32: at 300km that would be ~3cm off and jitter),
-# each one is placed at its center - true position, computed in doubles
+# Not moved with the planet node, float32 would jitter
 func update_chunk_positions():
 	for c in chunk_container.get_children():
 		c.update_position()
 
 func world_from_texture():
 	var image = load("res://Planet/earth_map.png").get_image()
-	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, ImageSource.new(image, 0.08)) # 0.08 is roughly the sea in this map
+	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, ImageSource.new(image, 0.08)) # 0.08 is roughly the sea
 	world_texture = ImageTexture.create_from_image(image)
 
 func world_from_etopo():
 	terrain_data = TerrainData.new(terrain_max_tile_level, terrain_tile_size, EtopoSource.new("res://data/etopo_60s", earth_meters_per_unit))
 
-# Tiles baked with tools/bake_tiles.py, level count and tile size come from the baked data
+# Baked with tools/bake_tiles.py
 func world_from_baked_tiles():
 	var source := DiskSource.new("res://data/earth_tiles", earth_meters_per_unit, "res://data/earth_moisture")
 	terrain_data = TerrainData.new(source.max_level, source.tile_size, source)
@@ -383,6 +401,54 @@ func update_sun_position():
 	var sun_z = sin(sun_orbit_angle) * orbit_distance
 	sun.global_position = global_position + Vector3(sun_x, 0, sun_z)
 	sun.look_at(global_position, Vector3.UP)
+
+# Stars fade out like the eye adapts to the brightest thing: day sky, the sun, sunlit ground
+func update_star_visibility(sun_dir: Vector3, delta: float):
+	var cam := get_viewport().get_camera_3d()
+	var pos := cam.global_position - global_position
+	var dist := pos.length()
+	var up := pos / dist
+	var screen := get_viewport().get_visible_rect().size
+
+	# day sky, fades towards space
+	var air := 1.0 - smoothstep(0.3 * atmosphere_height, atmosphere_height, dist - radius)
+	var daylight := smoothstep(twilight_band.x, twilight_band.y, up.dot(sun_dir)) * air
+
+	# the sun, unless the planet is in front of it
+	var planet_angle := asin(minf(1.0, radius / dist))
+	var sun_free := smoothstep(-0.02, 0.02, (-up).angle_to(sun_dir) - planet_angle)
+	var glare := 0.0
+	var sun_point := cam.global_position + sun_dir * 1000.0
+	if not cam.is_position_behind(sun_point):
+		var p := cam.unproject_position(sun_point)
+		var outside := Vector2(maxf(0.0, maxf(-p.x, p.x - screen.x)), maxf(0.0, maxf(-p.y, p.y - screen.y))).length()
+		glare = (1.0 - smoothstep(0.0, sun_glare_margin * screen.y, outside)) * sun_free
+
+	# sunlit ground, rays over the screen against the sea level sphere
+	var lit := 0.0
+	var c := dist * dist - radius * radius
+	for i in STAR_SAMPLE_GRID:
+		for j in STAR_SAMPLE_GRID:
+			var screen_point := Vector2((i + 0.5) / STAR_SAMPLE_GRID * screen.x, (j + 0.5) / STAR_SAMPLE_GRID * screen.y)
+			var ray := cam.project_ray_normal(screen_point)
+			var b := pos.dot(ray)
+			var d := b * b - c
+			if d < 0.0:
+				continue
+			var t := -b - sqrt(d)
+			if t < 0.0: # below sea level
+				t = -b + sqrt(d)
+			if t < 0.0:
+				continue
+			var hit_up := (pos + ray * t).normalized()
+			lit += smoothstep(-0.1, 0.15, hit_up.dot(sun_dir)) # same as the terrain shader
+	lit /= STAR_SAMPLE_GRID * STAR_SAMPLE_GRID
+
+	var brightness := clampf(maxf(maxf(daylight, glare), lit * lit_ground_strength), 0.0, 1.0)
+	var target := 1.0 - brightness
+	var speed: float = star_dim_speed if target < star_visibility else star_recover_speed
+	star_visibility = lerpf(star_visibility, target, 1.0 - exp(-speed * delta))
+	RenderingServer.global_shader_parameter_set("star_visibility", star_visibility)
 
 func update_orbit_speed():
 	if time_speed_multiplier == 0.0:
@@ -406,18 +472,17 @@ func set_time_speed(multiplier: float):
 	update_orbit_speed()
 
 
-# Debug camera: starts at the current view and only moves itself. The main controller (plane or free cam) stays,
-# so LOD, frustum culling and colliders keep following it and can be looked at from outside
+# Debug camera: LOD and colliders keep following the main controller
 func switch_to_free(debug: bool = false):
 	if debug:
 		var view_camera := get_viewport().get_camera_3d()
-		free_cam.process_mode = Node.PROCESS_MODE_INHERIT # it controls the debug camera, also when the plane is main
+		free_cam.process_mode = Node.PROCESS_MODE_INHERIT
 		camera_mode = free_cam.set_debug_mode(true, view_camera.global_transform)
 		canvas_layer.visible = true
 		flight_hud.visible = false
 		return
 
-	if main_mode == 1: # coming from the plane (or debug with the plane as main): free cam starts at the plane view
+	if main_mode == 1: # start at the plane view
 		free_cam.main_camera.rotation = Vector3.ZERO
 		free_cam.global_transform = plane.camera.global_transform
 	main_mode = 2
@@ -428,10 +493,9 @@ func switch_to_free(debug: bool = false):
 	camera_mode = free_cam.set_debug_mode(false)
 
 # --- Coordinates ---
-# Latitude / longitude in degrees, the same mapping as the earth data (EquirectSource.get_uv): north pole at -Y,
-# longitude 0 along +X, growing towards +Z. Height in meters above sea level (the planet radius)
+# Degrees, north pole at -Y, longitude 0 along +X, growing towards +Z. Height above sea level
 
-# Planet space position -> Vector3(latitude, longitude, height)
+# -> Vector3(latitude, longitude, height)
 func to_lat_lon_height(pos: Vector3) -> Vector3:
 	var dist := pos.length()
 	if dist < 0.001:
@@ -444,7 +508,7 @@ func from_lat_lon_height(latitude: float, longitude: float, height: float) -> Ve
 	var lon := deg_to_rad(longitude)
 	return Vector3(cos(lat) * cos(lon), -sin(lat), cos(lat) * sin(lon)) * (radius + height)
 
-# Planet space position of what the player controls (plane, free cam or debug camera)
+# Planet space position of what the player controls
 func controlled_position() -> Vector3:
 	if camera_mode == 3:
 		return get_true_position() + free_cam.debug_camera.global_position
@@ -453,14 +517,13 @@ func controlled_position() -> Vector3:
 func plane_position() -> Vector3:
 	return plane.global_position - global_position
 
-# Rotation from the ground frame (up, north) at from to the one at to, so things keep their compass heading
-# and their tilt relative to the ground. At the poles north isn't defined, there it's the shortest rotation
+# Keeps heading and tilt relative to the ground
 func _turn_between(from: Vector3, to: Vector3) -> Basis:
 	var a := from.normalized()
 	var b := to.normalized()
 	if absf(a.y) < 0.9999 and absf(b.y) < 0.9999:
 		return _ground_frame(b) * _ground_frame(a).inverse()
-	if a.dot(b) < -0.9999: # exactly the other side, any axis along the surface works
+	if a.dot(b) < -0.9999: # other side
 		return Basis(a.cross(Vector3.RIGHT if absf(a.x) < 0.9 else Vector3.UP).normalized(), PI)
 	return Basis(Quaternion(a, b))
 
@@ -473,7 +536,7 @@ func _ground_frame(up: Vector3) -> Basis:
 func teleport_controlled(target: Vector3):
 	var current := controlled_position()
 	var turn := _turn_between(current, target)
-	if camera_mode == 3: # only the debug camera
+	if camera_mode == 3:
 		var debug_camera: Camera3D = free_cam.debug_camera
 		debug_camera.global_basis = turn * debug_camera.global_basis
 		debug_camera.global_position = target - get_true_position()
@@ -483,7 +546,7 @@ func teleport_controlled(target: Vector3):
 		plane.pivot.global_basis = turn * plane.pivot.global_basis
 	else:
 		free_cam.main_camera.global_basis = turn * free_cam.main_camera.global_basis
-	shift_origin(target - current) # the main controller stays at the origin, the planet moves
+	shift_origin(target - current)
 
 func teleport_plane(target: Vector3):
 	var current := plane_position()
@@ -495,25 +558,23 @@ func teleport_plane(target: Vector3):
 	else:
 		plane.global_position = target - get_true_position()
 
-# Puts the plane in front of the camera that is looked through (free or debug), level with the ground there,
-# pointing where the camera looks, standing still
+# Plane in front of the camera, level, standing still
 func move_plane_to_view():
 	var view_camera := get_viewport().get_camera_3d()
 	var look := -view_camera.global_basis.z
 	var plane_pos: Vector3 = view_camera.global_position + look * plane.spring_arm.spring_length
 	var up := (get_true_position() + plane_pos).normalized()
 	var forward := look.slide(up).normalized()
-	if forward.length_squared() < 0.001: # looking straight up or down
+	if forward.length_squared() < 0.001:
 		forward = view_camera.global_basis.y.slide(up).normalized()
 
-	plane.global_position = plane_pos # if the plane is main (debug camera), it moves the origin there itself next physics frame
-	plane.global_basis = Basis.looking_at(-forward, up) # the plane flies along its +Z
-	plane.pivot.global_basis = Basis.looking_at(forward, up) # camera behind it
+	plane.global_position = plane_pos
+	plane.global_basis = Basis.looking_at(-forward, up) # flies along +Z
+	plane.pivot.global_basis = Basis.looking_at(forward, up)
 	plane.velocity = Vector3.ZERO
 	plane.move_speed = 0.0
 	plane.fall_speed = 0.0
 
-# Back to the plane where it is. It is somewhere in world space, the free cam was at the origin
 func switch_to_plane():
 	free_cam.set_debug_mode(false)
 	if main_mode != 1:

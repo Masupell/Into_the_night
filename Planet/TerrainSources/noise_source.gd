@@ -3,7 +3,7 @@ extends TerrainSource
 
 # Procedural continents and mountains from a seed
 const COAST_HEIGHT := 0.40 # becomes sea level (0)
-const OCEAN_DEPTH := 0.08 # deepest ocean after remapping, same as the old earth map
+const OCEAN_DEPTH := 0.08
 
 var continent_noise := FastNoiseLite.new()
 var mountain_noise := FastNoiseLite.new()
@@ -26,7 +26,7 @@ func _init(planet_seed: int) -> void:
 	mountain_noise.fractal_octaves = 4
 	mountain_noise.fractal_gain = 0.6
 
-	# both large and smooth: climate changes over hundreds of km
+	# climate changes over hundreds of km
 	moisture_noise.seed = planet_seed + 5678
 	moisture_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	moisture_noise.frequency = 0.006
@@ -63,11 +63,8 @@ func height_at(dir: Vector3) -> float:
 	final_height = clamp(final_height, 0.0, 1.0)
 	return remap_to_sea_level(final_height)
 
-# Bands like the Earth's air circulation: wet at the equator, dry at ~30° (Sahara, Australia), wet again at ~60°,
-# dry at the poles. cos(6 * latitude) has exactly those highs and lows, mid latitudes a bit drier than the equator.
-# climate_shift_noise moves the bands up to ~10° north/south so they aren't straight stripes,
-# moisture_noise adds wetter and drier regions, and land far from the sea gets drier (continent value as a cheap
-# stand-in for the distance to the coast, real distances / rain shadows need the one-time world generation)
+# Bands like on Earth: wet at the equator, dry at ~30°, wet at ~60°, dry at the poles.
+# Shifted by noise so they aren't straight, inland gets drier
 func moisture_at(dir: Vector3) -> float:
 	var sphere_point = dir * 150.0
 	var latitude = absf(asin(clampf(dir.y, -1.0, 1.0)))
@@ -77,11 +74,11 @@ func moisture_at(dir: Vector3) -> float:
 	var regional = moisture_noise.get_noise_3dv(sphere_point) * 0.35
 
 	var continent_value = (continent_noise.get_noise_3dv(sphere_point) + 1.0) * 0.5
-	var inland = smoothstep(0.46, 0.6, continent_value) * 0.15 # 0.46 is the coast in height_at
+	var inland = smoothstep(0.46, 0.6, continent_value) * 0.15 # 0.46 is the coast
 
 	return clampf(bands + regional - inland, 0.0, 1.0)
 
-# Moves the coast from COAST_HEIGHT to 0, ocean becomes -OCEAN_DEPTH..0 and land 0..1
+# Coast to 0, ocean -OCEAN_DEPTH..0, land 0..1
 static func remap_to_sea_level(h: float) -> float:
 	if h < COAST_HEIGHT:
 		return (h / COAST_HEIGHT - 1.0) * OCEAN_DEPTH

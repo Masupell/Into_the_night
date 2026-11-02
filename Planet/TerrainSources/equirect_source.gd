@@ -1,12 +1,11 @@
 class_name EquirectSource
 extends TerrainSource
 
-# Base for equirectangular (longitude/latitude) heightmaps: projection and sampling.
-# Subclasses load the data and return single pixels with get_value (ImageSource, EtopoSource)
+# Base for equirectangular heightmaps, subclasses implement get_value
 var width: int
 var height: int
 
-# Height of pixel x + y * width, already relative to sea level
+# Relative to sea level
 func get_value(_index: int) -> float:
 	return 0.0
 
@@ -23,7 +22,7 @@ static func get_uv(pos: Vector3) -> Vector2:
 	var v = (theta + PI / 2.0) / PI
 	return Vector2(u, v)
 
-# Bilinear on pixel centers, wraps around horizontally so there is no seam at u = 0/1
+# Bilinear, wraps horizontally
 func sample(uv: Vector2) -> float:
 	var x = uv.x * width - 0.5
 	var y = clampf(uv.y * height - 0.5, 0.0, height - 1.0)

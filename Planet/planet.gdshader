@@ -3,6 +3,10 @@ shader_type spatial;
 global uniform bool show_borders;
 global uniform bool show_lod;
 instance uniform float instance_lod_level;
+// Geomorphing: from the parent's shape (CUSTOM0) to its own
+global uniform float terrain_time;
+instance uniform float morph_start = -1000.0;
+uniform float morph_duration = 0.1;
 
 uniform sampler2D world_map;
 varying float v_height;
@@ -19,47 +23,42 @@ uniform vec3 rock_color: source_color = vec3(0.4, 0.3, 0.2);
 uniform vec3 tundra_color: source_color = vec3(0.42, 0.4, 0.28);
 uniform vec3 snow_color: source_color = vec3(1.0);
 
-// Height bands in real Earth meters (v_height * meters_per_unit), blending from the first to the second value.
-// The seabed color also is the sand of the beaches
-uniform float meters_per_unit = 8849.0; // set by the planet (earth_meters_per_unit): real meters that are v_height 1
+// Height bands in real Earth meters, the seabed color is also the beach sand
+uniform float meters_per_unit = 8849.0; // set by the planet
 uniform vec2 grass_band = vec2(2.0, 10.0);
 uniform vec2 dark_grass_band = vec2(700.0, 885.0);
 uniform vec2 rock_band = vec2(1600.0, 1770.0);
 
-// Temperature: annual mean in °C, from the latitude and the height (for now, real climate data later)
-// sea level: equator_temperature at the equator down to pole_temperature at the poles, temperature_curve shapes it
-// (1.5: about 18 °C at 30°, 10 °C at 45°, 1 °C at 60°), then it gets colder by lapse_rate per real km up
+// Temperature: annual mean in °C, from latitude and height (real climate data later)
 uniform float equator_temperature = 27.0;
 uniform float pole_temperature = -20.0;
 uniform float temperature_curve = 1.5;
 uniform float lapse_rate = 6.5;
-// Tundra (cold, low plants) over the grass from the first to the second temperature, snow comes after it
+// Tundra over the grass
 uniform vec2 tundra_temperature_band = vec2(3.0, -2.0);
-// Snow (and ice) on land from the first to the second temperature
+// Snow on land
 uniform vec2 snow_temperature_band = vec2(-6.0, -9.0);
 
-// Moisture (0 desert, 1 rainforest, 0.5 is plain grass): over the grass, from the first to the second value
+// Moisture: 0 desert, 0.5 grass, 1 rainforest
 uniform vec2 forest_moisture_band = vec2(0.6, 0.8);
 uniform vec2 savanna_moisture_band = vec2(0.45, 0.3);
 uniform vec2 desert_moisture_band = vec2(0.25, 0.1);
 
-// 0: smooth terrain normals from the mesh, 1: flat triangles (low poly look)
+// 0: smooth, 1: flat triangles (low poly)
 uniform float facet_amount : hint_range(0.0, 1.0) = 0.75;
-// Light from the whole sky, not only the sun: without it everything facing away from the sun is black.
-// Only on the day side, strongest on surfaces facing up. sun_dir and planet_center are set by the planet every frame
+// Sky light, so things facing away from the sun aren't black. Only on the day side
 uniform vec3 sky_color : source_color = vec3(0.45, 0.6, 0.85);
 uniform float sky_light = 0.3;
 uniform vec3 sun_dir = vec3(0.0, 0.0, 1.0);
 uniform vec3 planet_center;
 
-// Water: the ground below sea level gets the color of the water in front of it here, not by the water surface mesh.
-// The depth buffer can't separate a water surface from ground a few dm below it further away (the water disappeared
-// over shallow ground), this works at any distance. The water mesh only adds the reflection (water.gdshader)
-uniform float planet_radius; // set by the planet
-uniform float max_height; // set by the planet
+// Water color is done here on the ground, the depth buffer can't separate it from shallow ground further away.
+// The water mesh only adds the reflection
+uniform float planet_radius;
+uniform float max_height;
 uniform vec3 water_shallow : source_color = vec3(0.1, 0.7, 0.95);
 uniform vec3 water_deep : source_color = vec3(0.04, 0.2, 0.7);
-uniform float water_depth_scale = 8.0; // meters of water along the view until it is mostly deep colored and opaque
+uniform float water_depth_scale = 8.0; // meters until it is opaque
 
 
 //float hash3D(vec3 p) // fast 3d hash function I got
@@ -71,7 +70,9 @@ uniform float water_depth_scale = 8.0; // meters of water along the view until i
 
 void vertex()
 {
-    v_height = UV2.x; // height relative to sea level (0), 1 = max_height
+	float coarse = 1.0 - smoothstep(0.0, 1.0, clamp((terrain_time - morph_start) / morph_duration, 0.0, 1.0));
+	VERTEX += CUSTOM0.xyz * coarse;
+    v_height = UV2.x + CUSTOM0.w * coarse; // 0 sea level, 1 max_height
 	v_moisture = UV2.y;
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -97,13 +98,13 @@ void fragment()
 	float to_rock = smoothstep(rock_band.x, rock_band.y, meters);
 
 	vec3 up = normalize(v_world_pos - planet_center);
-	float latitude = asin(clamp(abs(up.y), 0.0, 1.0)) / (PI * 0.5); // 0 equator, 1 pole (the planet never rotates)
+	float latitude = asin(clamp(abs(up.y), 0.0, 1.0)) / (PI * 0.5); // 0 equator, 1 pole
 	float sea_temperature = mix(equator_temperature, pole_temperature, pow(latitude, temperature_curve));
 	float temperature = sea_temperature - lapse_rate * max(meters, 0.0) / 1000.0;
 	float to_tundra = smoothstep(tundra_temperature_band.x, tundra_temperature_band.y, temperature) * to_grass; // beaches stay sand
 	float to_snow = smoothstep(snow_temperature_band.x, snow_temperature_band.y, temperature) * step(0.0, meters);
 
-	// only on land, like the tundra: the seabed and the beaches stay as they are
+	// only on land
 	float to_forest = smoothstep(forest_moisture_band.x, forest_moisture_band.y, v_moisture) * to_grass;
 	float to_savanna = smoothstep(savanna_moisture_band.x, savanna_moisture_band.y, v_moisture) * to_grass;
 	float to_desert = smoothstep(desert_moisture_band.x, desert_moisture_band.y, v_moisture) * to_grass;
@@ -148,22 +149,22 @@ void fragment()
 	float camera_height = length(CAMERA_POSITION_WORLD - planet_center) - planet_radius;
 	if (v_height < 0.0 && camera_height > 0.0 && !show_lod && !show_borders)
 	{
-		// the view goes down through the water at an angle until it reaches this ground (Beer-Lambert approximation)
-		float ground_depth = -v_height * max_height; // no detail noise below sea level, so this is exact at the vertices
+		// Beer-Lambert approximation
+		float ground_depth = -v_height * max_height;
 		vec3 view_dir = normalize(v_world_pos - CAMERA_POSITION_WORLD);
 		float cos_view = max(dot(-view_dir, up), 0.01);
 		float depth_factor = 1.0 - exp(-ground_depth / cos_view / water_depth_scale);
 		float cover = mix(0.45, 1.0, depth_factor);
 		final_albedo = mix(final_albedo, mix(water_shallow, water_deep, depth_factor), cover);
-		// the more water in front, the more it is lit like a flat water surface instead of the ground below
+		// deeper water is lit like a flat surface
 		vec3 up_view = (VIEW_MATRIX * vec4(up, 0.0)).xyz;
 		NORMAL = normalize(mix(NORMAL, up_view, cover));
 	}
 
 	ALBEDO = final_albedo;
 
-	float daylight = smoothstep(-0.1, 0.15, dot(up, sun_dir)); // fades out over dusk
+	float daylight = smoothstep(-0.1, 0.15, dot(up, sun_dir));
 	vec3 world_normal = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
-	float sky_visible = 0.5 + 0.5 * dot(world_normal, up); // a wall sees half the sky, an overhang less
+	float sky_visible = 0.5 + 0.5 * dot(world_normal, up);
 	EMISSION = final_albedo * sky_color * sky_light * daylight * sky_visible;
 }

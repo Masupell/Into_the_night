@@ -1,9 +1,9 @@
 class_name ImageSource
 extends EquirectSource
 
-# Equirectangular heightmap image (red channel), like the old earth_map.png
+# Heightmap image (red channel)
 var data: PackedFloat32Array
-var sea_level: float # value in the image that is sea level, gets subtracted
+var sea_level: float
 
 func _init(source: Image, _sea_level: float) -> void:
 	sea_level = _sea_level

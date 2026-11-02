@@ -1,9 +1,8 @@
 """Converts an ETOPO 2022 GeoTIFF into a raw file Godot can read quickly.
 
 Output (next to each other):
-  <out>.bin   int16 little endian, elevation in meters relative to sea level, row major,
-              row 0 = 90N (north), column 0 = 180W, pixel centers (same layout as the GeoTIFF)
-  <out>.json  width, height, format and where the data came from
+  <out>.bin   int16 little endian meters, same layout as the GeoTIFF
+  <out>.json  width, height, format and source
 
 Usage (from the project root):
   tools/.venv/bin/python tools/convert_etopo.py data/source/ETOPO_2022_v1_30s_N90W180_surface.tif data/etopo_30s

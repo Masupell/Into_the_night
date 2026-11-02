@@ -1,41 +1,31 @@
 shader_type spatial;
 render_mode cull_front, unshaded, blend_premul_alpha, depth_test_disabled, skip_vertex_transform;
 
-// Single scattering: along the view ray, sunlight reaches each point dimmed by the air it went through on the way
-// (blue is scattered much more than red, so a long way through the air leaves it red: sunsets), is scattered
-// towards the camera there, and dimmed again on the way to the camera.
-// Rayleigh (small molecules): blue sky, scatters forward and backward alike.
-// Mie (haze, dust): grey, scatters mostly forward, the bright glow around the sun.
+// Single scattering. Rayleigh: blue sky, Mie: haze and the glow around the sun
 
 uniform float planet_radius;
 uniform float atmosphere_radius;
 uniform vec3 sun_dir;
-uniform float max_draw_distance = 10000.0; // set from the cameras far plane, see Planet.update_camera_planes
+uniform float max_draw_distance = 10000.0; // set from the cameras far plane
 
-// How much light goes missing straight up from sea level to space, per color (Earth: about 0.05, 0.12, 0.29).
-// Higher = deeper blue, but also more haze seen from space and a reddish horizon (long way through the air to the camera)
+// Light lost straight up from sea level to space, per color (Earth: about 0.05, 0.12, 0.29)
 uniform vec3 rayleigh_depth = vec3(0.05, 0.12, 0.29);
-// Extra air only on the sunlight's way to each point, not on the way to the camera: the planet is small, so near
-// the horizon the sunlight goes through much less air than on Earth (~15x the way straight up instead of ~38x),
-// sunsets wouldn't get red without it. Depends on planet radius / atmosphere height, retune when those change
+// Extra air only on the sunlight's way, the planet is small and sunsets wouldn't get red otherwise
 uniform float sun_reddening = 2.5;
-// Ozone only absorbs, mostly green-orange, and only counted on the sunlight's way. It is what keeps the sky blue at dusk
-// instead of olive (Earth: ~0.01, 0.028, 0.0013, here 2x because it is spread like the air instead of a layer up high)
+// Ozone keeps the sky blue at dusk instead of olive
 uniform vec3 ozone_depth = vec3(0.02, 0.056, 0.0026);
-// Reddish sunlight (dawn, dusk) only shows its color towards the sun, away from it it keeps its brightness but gets grey.
-// On Earth there is a pink band opposite the sun at dusk, 0 keeps it
+// Reddish sunlight only shows its color towards the sun, 0 keeps it everywhere
 uniform float away_desaturation : hint_range(0.0, 1.0) = 0.85;
 uniform float mie_depth = 0.02;
-uniform float mie_g : hint_range(0.0, 0.99) = 0.76; // how strongly haze scatters forward (glow size around the sun)
+uniform float mie_g : hint_range(0.0, 0.99) = 0.76; // glow size around the sun
 uniform float sun_intensity = 22.0;
-// Seen from above the atmosphere, the haze lies over the sunlit ground instead of black space and would look milky,
-// so it gets darker the further up the camera is (full brightness up to 30% of the atmosphere, this from its top on)
+// Darker from above, otherwise the haze looks milky from space
 uniform float space_brightness : hint_range(0.0, 1.0) = 0.4;
 
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
 
 const int SAMPLE_COUNT = 12;
-const float DENSITY_FALLOFF = 4.5; // atmosphere thickness / scale height of the air (density 1/e every scale height)
+const float DENSITY_FALLOFF = 4.5; // atmosphere thickness / scale height
 const float MIE_SCALE = 0.2; // haze stays lower than the air
 
 vec2 ray_sphere_intersect(vec3 ray_origin, vec3 ray_dir_vector, vec3 sphere_center, float sphere_radius)
@@ -51,9 +41,7 @@ vec2 ray_sphere_intersect(vec3 ray_origin, vec3 ray_dir_vector, vec3 sphere_cent
 	return vec2(-b - sqrt_d, -b + sqrt_d);
 }
 
-// Air between a point and space in one direction, in scale heights times the density at the ground
-// (straight up from sea level it is 1). Chapman function approximation (C. Schueler, GPU Pro 3), works down to
-// the horizon and a bit below it. x: planet radius / scale height, h: height / scale height, cos_zenith of the direction
+// Air between a point and space, Chapman approximation (C. Schueler, GPU Pro 3)
 float chapman(float x, float h, float cos_zenith)
 {
 	float c = sqrt(x + h);
@@ -65,9 +53,7 @@ float chapman(float x, float h, float cos_zenith)
 	return 2.0 * c0 * exp(min(x - x0, 30.0)) - c / (1.0 - c * cos_zenith) * exp(-h);
 }
 
-// The back faces (far side of the sphere, behind the planet) can be further away than the far plane.
-// Vertices beyond max_draw_distance are moved towards the camera along their view ray, so they stay on the same pixel
-// and the fragment shader still runs everywhere, it only uses the ray direction, the atmosphere itself is ray traced
+// Back faces can be past the far plane, moved closer along their view ray
 void vertex()
 {
 	VERTEX = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -99,8 +85,7 @@ void fragment()
 
 	ray_end = min(ray_end, terrain_dist);
 
-	// The water isn't in the depth buffer (transparent), so above water the view ends at the sea surface, not at the
-	// sea floor. Otherwise underwater mountains get less haze than the valleys between them and show through the water
+	// Water isn't in the depth buffer, so above water the view ends at the sea surface
 	if (length(ray_origin - planet_center) > planet_radius) {
 		vec2 sea_hit = ray_sphere_intersect(ray_origin, ray_dir, planet_center, planet_radius);
 		if (sea_hit.x > 0.0) ray_end = min(ray_end, sea_hit.x);
@@ -112,7 +97,7 @@ void fragment()
 	float thickness = max(1.0, atmosphere_radius - planet_radius);
 	float rayleigh_height = thickness / DENSITY_FALLOFF;
 	float mie_height = rayleigh_height * MIE_SCALE;
-	// scattering per meter at sea level, so that straight up adds up to rayleigh_depth / mie_depth
+	// per meter at sea level
 	float rayleigh_column = rayleigh_height * (1.0 - exp(-thickness / rayleigh_height));
 	vec3 rayleigh_coeff = rayleigh_depth / rayleigh_column;
 	vec3 sun_extinction = (rayleigh_depth * sun_reddening + ozone_depth) / rayleigh_column; // on the sunlight's way only
@@ -128,7 +113,7 @@ void fragment()
 	float color_keep = mix(1.0 - away_desaturation, 1.0, smoothstep(-0.2, 0.7, cos_angle));
 
 	float step_size = path_length / float(SAMPLE_COUNT);
-	vec3 view_depth = vec3(0.0); // air between the camera and the current sample, as optical depth per color
+	vec3 view_depth = vec3(0.0);
 	vec3 light = vec3(0.0);
 
 	for (int i = 0; i < SAMPLE_COUNT; i++)
@@ -166,7 +151,7 @@ void fragment()
 	float alpha = 1.0 - (transmittance.r + transmittance.g + transmittance.b) / 3.0;
 	if (alpha < 0.0001 && max(light.r, max(light.g, light.b)) < 0.0001) discard;
 
-	// premultiplied: the result is light + what is behind * (1 - alpha), the terrain behind gets dimmed by the air
+	// premultiplied
 	ALBEDO = light;
 	ALPHA = alpha;
 }

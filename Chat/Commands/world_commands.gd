@@ -118,7 +118,6 @@ func cmd_camera(context: CommandContext) -> String:
 			return "Invalid Argument. Expected 1/plane, 2/free, or 3/debug."
 	return ""
 
-# Latitude, longitude and height from the arguments, current: the same of the thing that moves (for ~ and missing height)
 # Returns the target position in planet space, or an error text
 func coordinates_from(context: CommandContext, current: Vector3) -> Variant:
 	var latitude := context.get_coordinate("latitude", current.x)

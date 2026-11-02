@@ -6,9 +6,25 @@
 [ext_resource type="PackedScene" uid="uid://dpmivd6uisae0" path="res://Chat/command_consule.tscn" id="3_7jktm"]
 [ext_resource type="PackedScene" uid="uid://cxod68oswlvw3" path="res://Plane/Hud/flight_hud.tscn" id="4_ryrav"]
 [ext_resource type="Script" uid="uid://d4nlbeiwft36b" path="res://Chat/command_processor.gd" id="5_eow3j"]
+[ext_resource type="Shader" uid="uid://csd5epoioahsf" path="res://Sky/stars.gdshader" id="6_stars"]
+[ext_resource type="Script" path="res://Sky/sky.gd" id="7_sky"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_feb5d"]
 radius = 1.5
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_stars"]
+shader = ExtResource("6_stars")
+shader_parameter/star_brightness = 1.0
+
+[sub_resource type="Sky" id="Sky_stars"]
+sky_material = SubResource("ShaderMaterial_stars")
+radiance_size = 0
+
+[sub_resource type="Environment" id="Environment_stars"]
+background_mode = 2
+sky = SubResource("Sky_stars")
+ambient_light_source = 1
+reflected_light_source = 1
 
 [node name="Game" type="Node3D" unique_id=1528733142]
 
@@ -52,6 +68,10 @@ offset_right = 40.0
 offset_bottom = 23.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1877350921]
+script = ExtResource("7_sky")
+environment = SubResource("Environment_stars")
 
 [node name="CommandProcessor" type="Node" parent="." unique_id=572393034 node_paths=PackedStringArray("console")]
 script = ExtResource("5_eow3j")

@@ -1,10 +1,9 @@
 class_name EtopoSource
 extends EquirectSource
 
-# Real elevation data, converted with tools/convert_etopo.py (int16 meters, see the .json next to it)
-# The whole file is kept in memory for now (467 MB for 60 arc seconds), until the tiles get baked to disk
+# Converted with tools/convert_etopo.py, whole file in memory
 var bytes: PackedByteArray
-var meters_per_unit: float # meters that become 1.0 (= planet.max_height)
+var meters_per_unit: float # meters that become planet.max_height
 
 func _init(path: String, _meters_per_unit: float) -> void:
 	meters_per_unit = _meters_per_unit

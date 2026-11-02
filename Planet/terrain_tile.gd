@@ -1,20 +1,17 @@
 class_name TerrainTile
 extends RefCounted
 
-# One square piece of a cube face. Pixel 0 and size - 1 lie exactly on the tile borders,
-# so neighbouring tiles share their border values (same as the faces do)
-# Level 0 is one tile for the whole face, every level splits each tile into 4 (like the quadtree),
-# so every level has the same pixels per tile, but twice the detail
+# One square piece of a cube face, border pixels are shared with the neighbours.
+# Every level splits each tile into 4, like the quadtree
 var face: int
 var level: int
 var tile_x: int
 var tile_y: int
 var size: int # pixels per edge
-var tiles_per_face: int # per edge, 2^level
+var tiles_per_face: int # per edge
 
 var heights: PackedFloat32Array
-# 0 = desert, 1 = rainforest. Changes slowly, so a coarser grid over the same square as the heights,
-# MOISTURE_SIZE - 1 has to divide size - 1 so its pixels land on height pixels (and on the tile borders)
+# 0 desert, 1 rainforest. Coarser grid, MOISTURE_SIZE - 1 has to divide size - 1
 const MOISTURE_SIZE := 33
 var moisture: PackedFloat32Array
 
@@ -34,12 +31,11 @@ func get_height(x: int, y: int) -> float:
 func set_height(x: int, y: int, value: float):
 	heights[x + y * size] = value
 
-# Direction on the sphere of a tile pixel. Uses whole face pixel coordinates,
-# so a shared border pixel gives exactly the same direction in both tiles
+# Face pixel coordinates, so shared border pixels match exactly
 func pixel_to_dir(x: int, y: int) -> Vector3:
 	return grid_to_dir(x, y, size)
 
-# Same for a pixel of the moisture grid
+# Same for the moisture grid
 func moisture_pixel_to_dir(x: int, y: int) -> Vector3:
 	return grid_to_dir(x, y, MOISTURE_SIZE)
 

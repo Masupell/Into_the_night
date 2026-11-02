@@ -66,9 +66,9 @@ func _process(delta):
 	if Input.is_key_pressed(KEY_E):
 		controlled_camera.rotate_object_local(Vector3.FORWARD, deg_to_rad(60.0 * delta))
 
-	var active = planet and planet.main_mode == 2 # the free cam is the main controller (also while the debug camera looks)
+	var active = planet and planet.main_mode == 2
 	if debug_mode:
-		# only the debug camera moves, the main controller stays where it is
+		# only the debug camera moves
 		velocity = Vector3.ZERO
 		if direction != Vector3.ZERO:
 			debug_camera.global_position += direction.normalized() * move_speed * delta
@@ -79,7 +79,7 @@ func _process(delta):
 			planet.shift_origin(global_position)
 			global_position = Vector3.ZERO
 
-	# Fast enough to go through the ground in one frame (or no collider there yet), so push back out
+	# Fell through the ground
 	if active:
 		planet.keep_above_ground(2.0)
 
@@ -92,7 +92,7 @@ func _process(delta):
 		planet.add_child(cube)
 		cube.global_position = controlled_camera.global_position
 
-# from: where the debug camera starts (the view before switching)
+# from: where the debug camera starts
 func set_debug_mode(debug: bool, from: Transform3D = Transform3D()) -> int:
 	debug_mode = debug
 	if debug:

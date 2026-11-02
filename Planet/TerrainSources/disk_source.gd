@@ -1,16 +1,14 @@
 class_name DiskSource
 extends TerrainSource
 
-# Tiles baked by tools/bake_tiles.py, read one at a time, so only loaded tiles are in memory
-# Every fill_tile opens its own FileAccess, so tiles can load on several threads at once
+# Tiles baked by tools/bake_tiles.py, own FileAccess per tile so they load on several threads
 var path: String
-var meters_per_unit: float # meters that become 1.0 (= planet.max_height)
+var meters_per_unit: float # meters that become planet.max_height
 var tile_size: int
 var max_level: int
 var tile_bytes: int
 var level_offsets: PackedInt64Array
-# Moisture tiles (tools/convert_aridity.py + bake_tiles.py), same layout with TerrainTile.MOISTURE_SIZE pixels per edge.
-# Empty path when there are none, then every tile gets the default moisture
+# Moisture tiles, empty path for default moisture
 var moisture_path := ""
 var moisture_tile_bytes: int
 var moisture_level_offsets: PackedInt64Array

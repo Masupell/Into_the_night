@@ -1,11 +1,11 @@
 class_name TerrainSource
 extends RefCounted
 
-# Height relative to sea level: 0 = sea level, 1 = planet.max_height above it, negative = under water
+# 0 sea level, 1 planet.max_height, negative under water
 func height_at(_dir: Vector3) -> float:
 	return 0.0
 
-# 0 = desert, 1 = rainforest. 0.5 (plain grass) for sources without moisture
+# 0 desert, 1 rainforest, 0.5 grass by default
 func moisture_at(_dir: Vector3) -> float:
 	return 0.5
 
