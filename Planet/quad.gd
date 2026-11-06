@@ -225,6 +225,30 @@ func get_neighbor_west() -> Quad:
 	return p_neighbor.children[Type.TOP_RIGHT] if quad_type == Type.TOP_LEFT else p_neighbor.children[Type.BOTTOM_RIGHT]
 
 
+# Finest existing quad at each corner, null outside the face
+func get_diagonal_neighbors() -> Array:
+	var outward := (uv_max - uv_min) * 0.25
+	return [
+		quad_at(Vector2(uv_max.x + outward.x, uv_min.y - outward.y)),
+		quad_at(uv_max + outward),
+		quad_at(Vector2(uv_min.x - outward.x, uv_max.y + outward.y)),
+		quad_at(uv_min - outward),
+	]
+
+func quad_at(uv: Vector2) -> Quad:
+	if uv.x < 0.0 or uv.y < 0.0 or uv.x > 1.0 or uv.y > 1.0:
+		return null
+	var quad := self
+	while quad.parent_quad != null:
+		quad = quad.parent_quad
+	while not quad.children.is_empty():
+		var mid: Vector2 = (quad.uv_min + quad.uv_max) * 0.5
+		if uv.y < mid.y:
+			quad = quad.children[Type.TOP_LEFT if uv.x < mid.x else Type.TOP_RIGHT]
+		else:
+			quad = quad.children[Type.BOTTOM_LEFT if uv.x < mid.x else Type.BOTTOM_RIGHT]
+	return quad
+
 func refresh_neighbors():
 	var neighbors = [
 		get_neighbor_north(),
@@ -232,6 +256,10 @@ func refresh_neighbors():
 		get_neighbor_east(),
 		get_neighbor_west()
 	]
+	# corners only care if the tile level changes here
+	var grid := planet.grid_size_for_level(level)
+	if level < planet.lod_level_limit and planet.terrain_data.tile_level_for(level, grid) != planet.terrain_data.tile_level_for(level + 1, planet.grid_size_for_level(level + 1)):
+		neighbors.append_array(get_diagonal_neighbors())
 
 	for neighbor in neighbors:
 		if neighbor != null:
@@ -242,9 +270,9 @@ func refresh_neighbors():
 func force_rebuild_leaves():
 	if chunk != null:
 		draw_chunk()
-	else:
-		for child in children:
-			child.force_rebuild_leaves()
+	# children can be shown while this chunk still exists
+	for child in children:
+		child.force_rebuild_leaves()
 
 func split():
 	if children.is_empty():
@@ -318,12 +346,31 @@ func draw_chunk():
 		chunk.waiting_for_tiles = true
 		return
 
-	chunk.generation_id += 1
-
 	var n_nb = get_neighbor_north()
 	var s_nb = get_neighbor_south()
 	var e_nb = get_neighbor_east()
 	var w_nb = get_neighbor_west()
+
+	# Coarsest last, it wins the corners
+	var edge_samplers := []
+	var tile_level: int = planet.terrain_data.tile_level_for(level, current_grid_size)
+	# north, south, east, west, then the corners: north east, south east, south west, north west
+	var neighbors := [n_nb, s_nb, e_nb, w_nb]
+	neighbors.append_array(get_diagonal_neighbors())
+	for i in range(8):
+		if neighbors[i] == null:
+			continue
+		var nb_level: int = neighbors[i].level
+		var nb_grid: int = planet.grid_size_for_level(nb_level)
+		if planet.terrain_data.tile_level_for(nb_level, nb_grid) < tile_level:
+			var edge_sampler := planet.terrain_data.get_sampler(face, nb_level, nb_grid, (uv_min + uv_max) * 0.5)
+			if edge_sampler == null: # tile is loading, try next frame
+				chunk.waiting_for_tiles = true
+				return
+			edge_samplers.append([i, edge_sampler])
+	edge_samplers.sort_custom(func(a, b): return a[1].tile.level > b[1].tile.level)
+
+	chunk.generation_id += 1
 
 	# Only stitch where the neighbour's spacing is really twice
 	var spacing := planet.vertex_spacing_for_level(level) * 1.5
@@ -339,7 +386,7 @@ func draw_chunk():
 		#var chunk_world_size = (planet.radius * 2.0 / sqrt(3.0)) / pow(2, level)
 		#print(level, " ", chunk_world_size)
 
-	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, planet.max_height * 0.05, morph_from_parent))
+	chunk.active_task_id = WorkerThreadPool.add_task(Chunk.generate_chunk_data.bind(chunk, chunk.generation_id, planet.detail_noise, sampler, uv_min, uv_max, corners, center, current_grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, planet.max_height * 0.05, morph_from_parent, edge_samplers))
 	chunk.set_instance_shader_parameter("instance_lod_level", float(level))
 	#chunk.build_mesh(planet, corners, planet.grid_size, planet.radius, planet.max_height, stitch_n, stitch_s, stitch_e, stitch_w, needs_collision)
 

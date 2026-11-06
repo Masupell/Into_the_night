@@ -156,8 +156,8 @@ func apply_generation_results(total_data: Dictionary):
 	is_ready = true
 
 
-static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float, morph_from_parent: bool):
-	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, terrain_center, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth, morph_from_parent)
+static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float, morph_from_parent: bool, edge_samplers: Array = []):
+	var data = calculate_terrain_mesh(detail_noise, sampler, uv_min, uv_max, corners, terrain_center, grid_size, radius, height, stitch_north, stitch_south, stitch_east, stitch_west, skirt_depth, morph_from_parent, edge_samplers)
 	var total_data = {
 		"gen_id": gen_id,
 		"center": terrain_center,
@@ -169,7 +169,7 @@ static func generate_chunk_data(chunk_instance: Chunk, gen_id: int, detail_noise
 	}
 	chunk_instance.task_result = total_data
 
-static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float, morph_from_parent: bool = false) -> Dictionary:
+static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: TerrainSampler, uv_min: Vector2, uv_max: Vector2, corners: Array, terrain_center: PackedFloat64Array, grid_size: int, radius: float, height: float, stitch_north: bool, stitch_south: bool, stitch_east: bool, stitch_west: bool, skirt_depth: float, morph_from_parent: bool = false, edge_samplers: Array = []) -> Dictionary:
 	var mesh_array = []
 	mesh_array.resize(Mesh.ARRAY_MAX)
 
@@ -211,6 +211,25 @@ static func calculate_terrain_mesh(detail_noise: FastNoiseLite, sampler: Terrain
 	var macro_ratios := sampler.sample_grid(uv_min, uv_max, grid_size, 1)
 	var moistures := sampler.sample_moisture_grid(uv_min, uv_max, grid_size)
 	var waters := sampler.sample_water_grid(uv_min, uv_max, grid_size, 1)
+	# Edges next to a coarser tile use its data, so both sides get the same surface
+	for entry in edge_samplers:
+		var edge_sampler: TerrainSampler = entry[1]
+		for i in range(1 if entry[0] >= 4 else num_vertices):
+			var x: int = i
+			var y: int = i
+			match entry[0]:
+				0: y = 0
+				1: y = grid_size
+				2: x = grid_size
+				3: x = 0
+				4: x = grid_size # corners, from here on
+				5: x = grid_size; y = grid_size
+				6: y = grid_size
+			var e: int = (x + 1) + (y + 1) * ext_size
+			var uv := uv_min + (uv_max - uv_min) * Vector2(x, y) / grid_size
+			macro_ratios[e] = edge_sampler.sample(uv)
+			waters[e] = edge_sampler.sample_water(uv)
+
 	var sphere_points := PackedVector3Array()
 	sphere_points.resize(ext_count)
 	var ext_cache := PackedFloat64Array()
