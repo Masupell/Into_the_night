@@ -77,12 +77,28 @@ func sample_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int =
 func sample_moisture_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
 	return sample_coarse_grid(tile.moisture, TerrainTile.MOISTURE_SIZE, uv_min, uv_max, grid_size)
 
-func sample_water_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
-	return sample_coarse_grid(tile.water, TerrainTile.WATER_SIZE, uv_min, uv_max, grid_size)
+func sample_water_grid(uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int = 0) -> PackedFloat32Array:
+	return sample_coarse_grid(tile.water, TerrainTile.WATER_SIZE, uv_min, uv_max, grid_size, border)
 
-# Whole chunk grid from one of the coarse grids, bilinear is enough here
-func sample_coarse_grid(m: PackedFloat32Array, size: int, uv_min: Vector2, uv_max: Vector2, grid_size: int) -> PackedFloat32Array:
-	var n := grid_size + 1
+# Bilinear
+func sample_water(uv: Vector2) -> float:
+	var step := TerrainTile.WATER_SIZE - 1
+	var x := clampf((uv.x * tile.tiles_per_face - tile.tile_x) * step, 0.0, step)
+	var y := clampf((uv.y * tile.tiles_per_face - tile.tile_y) * step, 0.0, step)
+	var x0 := first_pixel(x, step)
+	var y0 := first_pixel(y, step)
+	var tx := x - x0
+	var ty := y - y0
+	var m := tile.water
+	var r0 := y0 * TerrainTile.WATER_SIZE
+	var r1 := r0 + TerrainTile.WATER_SIZE
+	var top := m[r0 + x0] * (1.0 - tx) + m[r0 + x0 + 1] * tx
+	var bottom := m[r1 + x0] * (1.0 - tx) + m[r1 + x0 + 1] * tx
+	return top * (1.0 - ty) + bottom * ty
+
+# Whole chunk grid from one of the coarse grids, bilinear is enough here. The border ring is clamped to the tile
+func sample_coarse_grid(m: PackedFloat32Array, size: int, uv_min: Vector2, uv_max: Vector2, grid_size: int, border: int = 0) -> PackedFloat32Array:
+	var n := grid_size + 1 + 2 * border
 	var step := size - 1
 	var xs := PackedInt32Array()
 	var txs := PackedFloat32Array()
@@ -93,7 +109,7 @@ func sample_coarse_grid(m: PackedFloat32Array, size: int, uv_min: Vector2, uv_ma
 	ys.resize(n)
 	tys.resize(n)
 	for i in range(n):
-		var t := float(i) / grid_size
+		var t := float(i - border) / grid_size
 		var x := clampf((((uv_min.x * (1.0 - t) + uv_max.x * t) * tile.tiles_per_face) - tile.tile_x) * step, 0.0, step)
 		var y := clampf((((uv_min.y * (1.0 - t) + uv_max.y * t) * tile.tiles_per_face) - tile.tile_y) * step, 0.0, step)
 		xs[i] = first_pixel(x, step)

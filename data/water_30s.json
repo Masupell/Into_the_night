@@ -3,5 +3,5 @@
   "height": 21600,
   "format": "int16_le_water_meters",
   "layout": "row 0 = 90N, column 0 = 180W, pixel centers",
-  "source": "ETOPO_2022_v1_30s_N90W180_surface.tif"
+  "source": "ETOPO_2022_v1_30s_N90W180_surface.tif, HydroLAKES v1.0 (CC BY 4.0)"
 }

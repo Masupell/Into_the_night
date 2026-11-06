@@ -73,24 +73,26 @@ func get_sampler(face: int, quad_level: int, grid_cells: int, uv_center: Vector2
 	last_used[key] = Time.get_ticks_msec()
 	return TerrainSampler.new(tiles[key])
 
-# From the finest loaded tile, NAN if none, doesn't request anything
-func sample_loaded(face: int, uv: Vector2) -> float:
+# (height, water) from the finest loaded tile, NAN if none, doesn't request anything
+func sample_loaded(face: int, uv: Vector2) -> Vector2:
 	for level in range(max_level, -1, -1):
 		var count := 1 << level
 		var key := Vector4i(face, level, mini(int(uv.x * count), count - 1), mini(int(uv.y * count), count - 1))
 		if tiles.has(key):
-			return TerrainSampler.new(tiles[key]).sample(uv)
-	return NAN
+			var sampler := TerrainSampler.new(tiles[key])
+			return Vector2(sampler.sample(uv), sampler.sample_water(uv))
+	return Vector2(NAN, NAN)
 
-# From the finest tile, loading it if needed (NAN until then)
-func sample_finest(face: int, uv: Vector2) -> float:
+# (height, water) from the finest tile, loading it if needed (NAN until then)
+func sample_finest(face: int, uv: Vector2) -> Vector2:
 	var count := 1 << max_level
 	var key := Vector4i(face, max_level, mini(int(uv.x * count), count - 1), mini(int(uv.y * count), count - 1))
 	if not tiles.has(key):
 		request_tile(key)
-		return NAN
+		return Vector2(NAN, NAN)
 	last_used[key] = Time.get_ticks_msec()
-	return TerrainSampler.new(tiles[key]).sample(uv)
+	var sampler := TerrainSampler.new(tiles[key])
+	return Vector2(sampler.sample(uv), sampler.sample_water(uv))
 
 func get_tile(face: int, level: int, tile_x: int, tile_y: int) -> TerrainTile:
 	return tiles.get(Vector4i(face, level, tile_x, tile_y))

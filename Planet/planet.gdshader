@@ -12,6 +12,7 @@ uniform sampler2D world_map;
 varying float v_height;
 varying float v_moisture;
 varying float v_water; // water level, same units as v_height
+varying float v_surface; // v_height with the detail noise
 varying vec3 v_world_pos;
 
 uniform vec3 seabed_color: source_color = vec3(0.55, 0.48, 0.38);
@@ -76,6 +77,7 @@ void vertex()
     v_height = UV2.x + CUSTOM0.w * coarse; // 0 sea level, 1 max_height
 	v_moisture = UV2.y;
 	v_water = CUSTOM1.x;
+	v_surface = CUSTOM1.y + CUSTOM1.z * coarse;
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
@@ -149,7 +151,7 @@ void fragment()
 	}
 
 	float camera_height = length(CAMERA_POSITION_WORLD - planet_center) - planet_radius;
-	float ground_depth = (v_water - v_height) * max_height;
+	float ground_depth = (v_water - v_surface) * max_height;
 	if (ground_depth > 0.0 && camera_height > v_water * max_height && !show_lod && !show_borders)
 	{
 		// Beer-Lambert approximation

@@ -38,5 +38,5 @@
     }
   ],
   "layout": "level offset + ((face * n + tile_y) * n + tile_x) * tile_bytes, n = 2^level, pixels x + y * tile_size",
-  "source": "ETOPO_2022_v1_30s_N90W180_surface.tif"
+  "source": "ETOPO_2022_v1_30s_N90W180_surface.tif, HydroLAKES v1.0 (CC BY 4.0)"
 }

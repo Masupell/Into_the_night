@@ -11,33 +11,43 @@ mkdir -p data/source && curl -L -o data/source/ETOPO_2022_v1_30s_N90W180_surface
 3. Convert to raw int16 meters (data/etopo_30s.bin, 1.9 GB, needs ~13 GB RAM)
 tools/.venv/bin/python tools/convert_etopo.py data/source/ETOPO_2022_v1_30s_N90W180_surface.tif data/etopo_30s
 
-4. Bake the tile pyramid the game streams from (data/earth_tiles.bin, 4.4 GB)
-tools/.venv/bin/python tools/bake_tiles.py data/etopo_30s data/earth_tiles --max-level 7
+4. Download HydroLAKES v1.0 (820 MB zip) into data/source/, no need to unpack
+Messager, M.L., Lehner, B., Grill, G., Nedeva, I., Schmitt, O. (2016): Estimating the volume and age of water stored
+in global lakes using a geo-statistical approach. Nature Communications 7: 13603, https://doi.org/10.1038/ncomms13603,
+https://www.hydrosheds.org/products/hydrolakes, license CC BY 4.0 (the game has to credit it)
+curl -L -o data/source/HydroLAKES_polys_v10_shp.zip https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_shp.zip
 
-5. Download the Global Aridity Index v3.1 (annual, 646 MB zip) into data/source/ and unpack the aridity map
+5. Water level (ocean and lakes) and the heights with carved lake beds
+(data/water_30s.bin and data/etopo_lakes_30s.bin, 1.9 GB each, needs ~18 GB RAM, ~2 min)
+tools/.venv/bin/python tools/convert_water.py data/etopo_30s data/water_30s --lakes data/source/HydroLAKES_polys_v10_shp.zip --heights-out data/etopo_lakes_30s
+
+6. Bake the tile pyramid the game streams from (data/earth_tiles.bin, 4.4 GB)
+tools/.venv/bin/python tools/bake_tiles.py data/etopo_lakes_30s data/earth_tiles --max-level 7
+
+7. Bake the water tiles (data/earth_water.bin, 0.29 GB, ~17 s). --max-level must be the same as in step 6,
+--tile-size must be TerrainTile.WATER_SIZE. Without this file everything below sea level is water
+tools/.venv/bin/python tools/bake_tiles.py data/water_30s data/earth_water --max-level 7 --tile-size 33
+
+8. Rebuild the coarse levels of both, so lakes and coasts keep their size from far away (~1.5 min, ~12 GB RAM).
+Changes the files from step 6 and 7, so run it again after baking either of them
+tools/.venv/bin/python tools/bake_coarse_water.py data/earth_tiles data/earth_water
+
+9. Download the Global Aridity Index v3.1 (annual, 646 MB zip) into data/source/ and unpack the aridity map
 Zomer, R. J.; Trabucco, A. (2022/2025): Global Aridity Index and Potential Evapotranspiration (ET0) Database v3.1,
 https://doi.org/10.6084/m9.figshare.7504448, license CC BY 4.0 (the game has to credit it)
 curl -L -o data/source/Global-AI_ET0__annual_v3_1.zip https://ndownloader.figshare.com/files/56300327
 unzip -j data/source/Global-AI_ET0__annual_v3_1.zip 'Global-AI_ET0__annual_v3_1/ai_v31_yr.tif' -d data/source
 
-6. Convert to moisture (data/moisture_60s.bin, 233 MB, needs ~12 GB RAM, ~30 s)
+10. Convert to moisture (data/moisture_60s.bin, 233 MB, needs ~12 GB RAM, ~30 s)
 tools/.venv/bin/python tools/convert_aridity.py data/source/ai_v31_yr.tif data/moisture_60s --downsample 2
 
-7. Bake the moisture tiles (data/earth_moisture.bin, 0.14 GB, ~15 s). --max-level must be the same as in step 4,
+11. Bake the moisture tiles (data/earth_moisture.bin, 0.14 GB, ~15 s). --max-level must be the same as in step 6,
 --tile-size must be TerrainTile.MOISTURE_SIZE. Without this file the game runs, but everything has plain grass
 tools/.venv/bin/python tools/bake_tiles.py data/moisture_60s data/earth_moisture --max-level 7 --tile-size 33
 
-8. Water level, only the ocean for now (data/water_30s.bin, 1.9 GB, needs ~16 GB RAM, ~1 min)
-tools/.venv/bin/python tools/convert_water.py data/etopo_30s data/water_30s
-
-9. Bake the water tiles (data/earth_water.bin, 0.29 GB, ~17 s). --max-level must be the same as in step 4,
---tile-size must be TerrainTile.WATER_SIZE. Without this file everything below sea level is water
-tools/.venv/bin/python tools/bake_tiles.py data/water_30s data/earth_water --max-level 7 --tile-size 33
-
-10. Download the star map (NASA SVS Deep Star Maps 2020, 4k EXR, 36 MB) into data/source/. Without it the sky is black
+12. Download the star map (NASA SVS Deep Star Maps 2020, 4k EXR, 36 MB) into data/source/. Without it the sky is black
 Credit: NASA/Goddard Space Flight Center Scientific Visualization Studio, Gaia DR2: ESA/Gaia/DPAC, https://svs.gsfc.nasa.gov/4851
 curl -L -o data/source/starmap_2020_4k.exr https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/starmap_2020_4k.exr
 
-Afterwards data/source/ (except the star map), data/etopo_30s.bin, data/moisture_60s.bin and data/water_30s.bin
-are only needed to bake again.
+Afterwards data/source/ (except the star map) and the data/*_30s.bin / *_60s.bin files are only needed to bake again.
 Smaller/older alternative: the 60s file (60s_surface_elev_gtif, 0.5 GB) with --max-level 6 gives a 1.1 GB earth_tiles.bin

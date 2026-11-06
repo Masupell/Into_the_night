@@ -343,18 +343,18 @@ func shift_origin(moved_by: Vector3):
 # Like ground_height_at, but loads the finest tile, NAN until then
 func ground_height_loading(dir: Vector3) -> float:
 	var face := CubeSphere.get_face(dir)
-	var h = terrain_data.sample_finest(face, CubeSphere.get_face_uv(dir, face))
-	if is_nan(h):
+	var h := terrain_data.sample_finest(face, CubeSphere.get_face_uv(dir, face))
+	if is_nan(h.x):
 		return NAN
-	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
+	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h.x]), PackedFloat32Array([h.y]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
 
 # From the finest loaded tile, ocean floor if nothing is loaded yet
 func ground_height_at(dir: Vector3) -> float:
 	var face := CubeSphere.get_face(dir)
 	var h := terrain_data.sample_loaded(face, CubeSphere.get_face_uv(dir, face))
-	if is_nan(h):
+	if is_nan(h.x):
 		return min_terrain_radius - radius
-	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
+	return Chunk.surface_heights(detail_noise, PackedVector3Array([dir.normalized()]), PackedFloat32Array([h.x]), PackedFloat32Array([h.y]), max_height, radius / Chunk.DETAIL_TUNED_FOR_RADIUS)[0]
 
 # Pushes the controller back up if it fell through the ground
 func keep_above_ground(clearance: float) -> bool:
